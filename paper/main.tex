@@ -84,7 +84,7 @@ We make three contributions.
 \textbf{(ii)}~We identify a Hopf bifurcation in the closed-loop dynamics: there exists a critical KL penalty~$\beta_c$ such that $\beta > \beta_c$ yields asymptotic convergence (stable spiral) while $\beta < \beta_c$ produces sustained reward-hacking limit cycles, and we give the cycling frequency~$\omega_c$ in closed form.
 \textbf{(iii)}~Applying Pontryagin's Maximum Principle (PMP), we derive a principled \emph{non-constant} KL schedule~$\beta^*(t)$ that tracks the separatrix between convergence and cycling.
 Experiments on synthetic alignment games confirm the predicted bifurcation threshold and cycling frequency.
-Schedule comparisons show that non-constant schedules (including the PMP-derived one) dramatically outperform constant baselines, with adaptive decay schedules reducing regret by up to $90\%$.
+Schedule comparisons show that non-constant decay schedules substantially outperform constant baselines, reducing regret by $28$--$41\%$ relative to a well-tuned constant $\beta = 1.5\beta_c$.
 \end{abstract}
 
 % ======================================================================
@@ -96,10 +96,10 @@ Schedule comparisons show that non-constant schedules (including the PMP-derived
 Reinforcement learning from human feedback (RLHF) has become the dominant paradigm for aligning large language models with human intent~\citep{ouyang2022training,bai2022training}.
 The standard pipeline---train a reward model on preference data, then optimize the policy against this proxy reward while penalizing divergence from a reference policy via a KL term---can be understood as an \emph{implicit game}: the policy seeks to maximize reward while the reward model (or, more broadly, the environment) may present an adversarial distribution over queries.
 This game-theoretic view has been made explicit in a series of recent works.
-\citet{munos2024nash} introduced \emph{Nash-RLHF}, casting alignment as a two-player constant-sum game between the policy and a ``dueling'' comparator, with the solution concept being a Nash equilibrium in the space of mixed policies.
+\citet{munos2024nash} introduced Nash Learning from Human Feedback (NLHF), casting alignment as a two-player constant-sum game between the policy and a ``dueling'' comparator, with the solution concept being a Nash equilibrium in the space of mixed policies.
 \citet{inpo2025} proposed \emph{INPO}, an iterative Nash policy optimization method based on no-regret learning that avoids explicit win-rate estimation.
 \citet{starlhf2024} introduced Self-Play Preference Optimization (SPO), framing preference learning as a zero-sum game and proving that a single agent playing against itself can find the minimax winner without a reward model.
-A complementary line of work studies the \emph{fundamental limits} of RLHF through the lens of reward over-optimization~\citep{gao2023scaling}, establishing regret bounds for fixed KL budgets.
+A complementary line of work studies reward over-optimization empirically~\citep{gao2023scaling}, finding scaling laws that characterize how excess proxy reward grows with KL budget.
 
 Despite their conceptual appeal, all existing game-theoretic RLHF formulations operate in \emph{discrete time}: updates occur at iteration indices $k = 0, 1, 2, \ldots$, and convergence is analyzed via contraction arguments or potential functions on the iterate sequence.
 This discrete viewpoint obscures three phenomena that become transparent in the continuous-time limit:
@@ -254,24 +254,15 @@ Stability of the closed-loop matrix $\bA_{\mathrm{cl}} = \bA - \bS\bP$ is necess
 
 \begin{theorem}[Hopf Bifurcation and Cycling Threshold]
 \label{thm:hopf}
-Let $\bA_{\mathrm{cl}}(\beta) = \bA(\beta) - \bS\,\bP(\beta)$ denote the closed-loop Jacobian of the LQ alignment game, where $\bA(\beta)$ depends on $\beta$ through the linearization of the KL penalty.
-There exists a critical penalty
-\begin{equation}
-  \beta_c = \frac{\|\bA_{12}\|\,\|\bA_{21}\|}{\operatorname{tr}(\bS\,\bP_0)},
-  \label{eq:beta_c}
-\end{equation}
-where $\bP_0$ solves~\eqref{eq:riccati} at $\beta = 0$, such that:
+Let $\bA_{\mathrm{cl}}(\beta) = \bA(\beta) + \bS\,\bP(\beta)$ denote the closed-loop Jacobian of the LQ alignment game, where $\bA(\beta)$ depends on $\beta$ through $\bA_{11,\mathrm{eff}} = \bA_{11} - \beta\,\bI$.
+Assume the cross-coupling matrices $\bA_{12}, \bA_{21}$ have skew-symmetric components sufficient to induce rotation in the joint state space.
+Then there exists a critical penalty $\beta_c > 0$, determined as the unique zero of $\max_i \operatorname{Re}\lambda_i(\bA_{\mathrm{cl}}(\beta))$, such that:
 \begin{enumerate}[leftmargin=1.5em,itemsep=1pt]
   \item For $\beta > \beta_c$: all eigenvalues of $\bA_{\mathrm{cl}}(\beta)$ have strictly negative real part.
     The equilibrium is a stable spiral, and all trajectories converge.
   \item For $\beta = \beta_c$: a pair of complex conjugate eigenvalues $\lambda_\pm = \pm i\omega_c$ crosses the imaginary axis with non-zero speed $\frac{d}{d\beta}\operatorname{Re}(\lambda_\pm)\big|_{\beta_c} \neq 0$.
-    The crossing frequency is
-    \begin{equation}
-      \omega_c = \sqrt{\det(\bA_{12}\bA_{21}) - \tfrac{1}{4}\operatorname{tr}(\bA_{\mathrm{cl}}(\beta_c))^2}.
-      \label{eq:omega_c}
-    \end{equation}
-  \item For $\beta < \beta_c$: a supercritical Hopf bifurcation occurs, giving rise to a stable limit cycle of frequency $\omega_c + O(\beta_c - \beta)$ and amplitude $O(\sqrt{\beta_c - \beta})$.
-    The limit cycle corresponds to periodic \emph{reward-hacking oscillations}.
+    The crossing frequency is $\omega_c = |\operatorname{Im}(\lambda_\pm)|$ at $\beta = \beta_c$.
+  \item For $\beta < \beta_c$: the equilibrium is unstable. In the presence of nonlinear saturation (e.g., cubic terms from curvature of $r^*$), a supercritical Hopf bifurcation produces a stable limit cycle with amplitude $O(\sqrt{\beta_c - \beta})$, corresponding to periodic \emph{reward-hacking oscillations}.
 \end{enumerate}
 \end{theorem}
 
@@ -285,7 +276,7 @@ The supercriticality (stable limit cycle rather than unstable) follows from comp
 \begin{theorem}[Optimal KL Schedule via PMP]
 \label{thm:schedule}
 Consider the outer optimization problem of choosing a time-varying penalty $\beta: [0, T] \to \R_{>0}$ to maximize the cumulative true reward $\int_0^T r^*(\btheta(t))\,dt$, where $\btheta(t)$ evolves under the closed-loop Nash dynamics of the LQ game.
-Let $\mu > 0$ denote the spectral gap of $\bA_{\mathrm{cl}}(\beta_c)$ restricted to the stable manifold, and let $\omega_c$ be the Hopf frequency~\eqref{eq:omega_c}.
+Let $\mu > 0$ denote the spectral gap of $\bA_{\mathrm{cl}}(\beta_c)$ restricted to the stable manifold, and let $\omega_c$ be the Hopf frequency from Theorem~\ref{thm:hopf}.
 The PMP-optimal schedule satisfies, in the two-dimensional center-manifold reduction,
 \begin{equation}
   \beta^*(t) = \beta_c\Bigl(1 + \eta\,e^{-\mu t}\cos(\omega_c t + \psi)\Bigr),
@@ -363,7 +354,7 @@ The predicted bifurcation threshold is $\beta_c = 0.5000$ (2D) and $\beta_c = 0.
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.85\textwidth]{figures/phase_portraits.pdf}
-  \caption{\textbf{Phase portraits} of the alignment game for $\beta > \beta_c$ (left, stable spiral converging to Nash equilibrium) and $\beta < \beta_c$ (right, limit cycle corresponding to periodic reward-hacking oscillations). The dashed curve marks the stable manifold $\cW^s$; the solid cycle is the Hopf limit cycle.}
+  \caption{\textbf{Phase portraits} of the alignment game for $\beta > \beta_c$ (left, stable spiral converging to Nash equilibrium) and $\beta < \beta_c$ (right, limit cycle corresponding to periodic reward-hacking oscillations). The dashed circle marks the predicted limit cycle radius $r_{\mathrm{eq}} = \sqrt{(a - \beta)/\mu}$.}
   \label{fig:phase}
 \end{figure}
 
@@ -371,6 +362,11 @@ The predicted bifurcation threshold is $\beta_c = 0.5000$ (2D) and $\beta_c = 0.
 As a consistency check, we verify that the RK4 numerical integration correctly reproduces the analytical steady-state radius $r_{\mathrm{eq}} = \sqrt{(a - \beta)/\mu}$ of the Hopf normal form at six values of $\beta/\beta_c \in \{0.30, 0.50, 0.70, 0.80, 0.90, 0.95\}$.
 The agreement is exact to numerical precision, as expected since the normal form has this radius as an exact fixed point of the polar dynamics.
 The more substantive test is whether the \emph{4D model}---which is \emph{not} in normal form---exhibits the predicted bifurcation structure, which we verify next.
+
+\paragraph{LQ game with Riccati feedback.}
+To validate the theory--code connection, we solve the zero-sum ARE (Theorem~\ref{thm:riccati}) via Hamiltonian eigenvalue decomposition across a range of $\beta$ values.
+The LQ game with rotation-like cross-coupling exhibits a Hopf bifurcation at $\beta_c = 0.7311$ with crossing frequency $\omega_c = 0.5149$.
+Simulating the closed-loop Nash dynamics confirms: for $\beta = 1.5\beta_c$, the system converges to zero (stable spiral), while for $\beta = 0.5\beta_c$, the system diverges (no nonlinear saturation in the LQ model to form a limit cycle).
 
 \paragraph{Bifurcation diagram and cycling frequency (Figure~\ref{fig:bifurcation}).}
 Figure~\ref{fig:bifurcation}(a) plots the asymptotic oscillation amplitude as a function of $\beta/\beta_c$, confirming the $O(\sqrt{\beta_c - \beta})$ scaling predicted by Theorem~\ref{thm:hopf}.
@@ -413,7 +409,7 @@ PMP (analytical) & 1.249 & 0.0000 \\
   \begin{subfigure}[t]{0.48\textwidth}
     \centering
     \includegraphics[width=\textwidth]{figures/regret_comparison.pdf}
-    \caption{Cumulative regret for four KL schedules.}
+    \caption{Cumulative regret for five KL schedules.}
   \end{subfigure}
   \caption{\textbf{(a)} Bifurcation diagram confirming the $\sqrt{\beta_c - \beta}$ amplitude scaling (solid: theory, circles: simulation). \textbf{(b)} Cumulative regret for five KL schedules. Non-constant decay schedules dramatically outperform constant baselines; the PMP schedule~\eqref{eq:beta_star} outperforms constant $\beta$ but is slightly worse than cosine/linear decay in this low-dimensional setting.}
   \label{fig:bifurcation}
@@ -438,7 +434,8 @@ We adapt this ``learning as optimal control'' lens from supervised learning to t
 
 \paragraph{Reward hacking and over-optimization.}
 \citet{gao2023scaling} empirically characterized reward over-optimization, finding a scaling law between KL budget and excess proxy reward.
-Our Theorem~\ref{thm:hopf} provides a mechanistic explanation: the onset of over-optimization is a Hopf bifurcation, and the scaling $O(\sqrt{\beta_c - \beta})$ matches the universal amplitude law of supercritical bifurcations.
+Our Theorem~\ref{thm:hopf} offers a complementary mechanistic perspective: in the continuous-time game, the onset of oscillatory over-optimization is a Hopf bifurcation with the universal $O(\sqrt{\beta_c - \beta})$ amplitude scaling.
+Whether this mechanism is operative in practical RLHF remains an open question.
 
 \paragraph{Differential games.}
 The theory of two-player zero-sum differential games is classical~\citep{basar1999dynamic,isaacs1965differential}.

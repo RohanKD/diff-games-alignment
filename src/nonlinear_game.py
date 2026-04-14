@@ -122,8 +122,8 @@ DEFAULT_PARAMS_4D = {
 def dynamics_4d(z, beta, params=None):
     """
     4D alignment game with policy-reward coupling.
-    Exhibits Hopf bifurcation when the effective growth rate
-    a - beta + c*d/sigma crosses zero.
+    Exhibits Hopf bifurcation at a critical beta_c determined
+    numerically (approximately 0.6957 for default parameters).
     """
     p = params or DEFAULT_PARAMS_4D
     x1, x2, y1, y2 = z

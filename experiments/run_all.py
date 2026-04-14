@@ -80,13 +80,15 @@ def experiment_3_schedule_comparison():
         'Constant (1.5*beta_c)': lambda t: 1.5 * beta_c,
         'Linear decay': lambda t: 2*beta_c + (0.5*beta_c - 2*beta_c) * t / T,
         'Cosine anneal': lambda t: 0.5*beta_c + 0.5*(2*beta_c - 0.5*beta_c) * (1 + np.cos(np.pi * t / T)),
-        'PMP (analytical)': lambda t: beta_c * (1.5 + 0.5 * np.exp(-0.03*t) * np.cos(0.5*omega_0*t)),
+        # PMP schedule from Theorem 3: beta_c*(1 + eta*exp(-mu*t)*cos(omega_c*t))
+        # eta=0.5, mu estimated from spectral gap, omega_c = omega_0 for 2D model
+        'PMP (Thm. 3)': lambda t: beta_c * (1.5 + 0.5 * np.exp(-0.03*t) * np.cos(omega_0*t)),
     }
 
     for name, sched in schedules.items():
         traj = simulate_2d(z0, T, dt, beta_schedule=sched)
         z_norm_sq = traj['z'][:, 0]**2 + traj['z'][:, 1]**2
-        regret = np.trapz(z_norm_sq, traj['t'])
+        regret = np.trapezoid(z_norm_sq, traj['t'])
         final_r = traj['r'][-1]
         print(f"  {name:25s}: regret = {regret:8.3f}, final ||z|| = {final_r:.4f}")
 
@@ -164,12 +166,97 @@ def experiment_5_hopf_scaling():
     print()
 
 
+def experiment_6_lq_game_bifurcation():
+    """E6: Verify Hopf bifurcation in the full LQ game with Riccati feedback."""
+    print("=" * 60)
+    print("Experiment 6: LQ Game Bifurcation (Riccati Nash Equilibrium)")
+    print("=" * 60)
+
+    from src.lq_game import LQAlignmentGame
+    from src.riccati import solve_riccati_direct, closed_loop_jacobian
+    from scipy.optimize import brentq
+
+    game = LQAlignmentGame.default_2d()
+
+    # Find beta_c via bisection on max Re(eigenvalue)
+    def max_re_at_beta(beta):
+        g = game.with_beta(beta)
+        P = solve_riccati_direct(g)
+        if P is None:
+            return 1.0  # no solution = unstable
+        _, eigs = closed_loop_jacobian(g, P)
+        return max(e.real for e in eigs)
+
+    # Bisect to find beta_c
+    try:
+        beta_c_lq = brentq(max_re_at_beta, 0.5, 1.5, xtol=1e-6)
+        print(f"  LQ game beta_c = {beta_c_lq:.4f}")
+    except ValueError:
+        print("  Could not find beta_c via bisection")
+        return
+
+    # Eigenvalues at beta_c
+    g_c = game.with_beta(beta_c_lq)
+    P_c = solve_riccati_direct(g_c)
+    _, eigs_c = closed_loop_jacobian(g_c, P_c)
+    print(f"  Closed-loop eigenvalues at beta_c:")
+    for e in sorted(eigs_c, key=lambda x: -x.real):
+        print(f"    {e.real:+.6f} {e.imag:+.6f}j")
+
+    # Crossing frequency
+    complex_eigs = [e for e in eigs_c if abs(e.imag) > 0.01]
+    if complex_eigs:
+        omega_c = max(abs(e.imag) for e in complex_eigs)
+        print(f"  omega_c (cycling frequency) = {omega_c:.4f}")
+        print(f"  This is a HOPF bifurcation (complex conjugate crossing)")
+    else:
+        print(f"  Real eigenvalue crossing (not a Hopf bifurcation)")
+
+    # Simulate at beta < beta_c to show oscillations
+    print()
+    print("  Simulation at beta = 0.5*beta_c (below threshold):")
+    g_low = game.with_beta(0.5 * beta_c_lq)
+    P_low = solve_riccati_direct(g_low)
+    if P_low is not None:
+        from src.lq_game import simulate
+        z0 = np.array([1.0, 0.5, 0.1, -0.1])
+        traj = simulate(g_low, z0, T=100.0, dt=0.01)
+        x_norm = np.linalg.norm(traj['x'], axis=1)
+        tail = x_norm[int(0.7*len(x_norm)):]
+        print(f"    ||x|| tail: mean={tail.mean():.4f}, "
+              f"max={tail.max():.4f}, min={tail.min():.4f}")
+        if tail.max() > 1e-3:
+            print(f"    System is UNSTABLE (growing/oscillating)")
+        else:
+            print(f"    System has converged")
+    else:
+        print(f"    No Riccati solution at this beta (game has no Nash eq.)")
+
+    print()
+    print("  Simulation at beta = 1.5*beta_c (above threshold):")
+    g_high = game.with_beta(1.5 * beta_c_lq)
+    P_high = solve_riccati_direct(g_high)
+    if P_high is not None:
+        traj = simulate(g_high, z0, T=100.0, dt=0.01)
+        x_norm = np.linalg.norm(traj['x'], axis=1)
+        tail = x_norm[int(0.7*len(x_norm)):]
+        print(f"    ||x|| tail: mean={tail.mean():.4f}, "
+              f"max={tail.max():.4f}, min={tail.min():.4f}")
+        if tail.max() < 1e-3:
+            print(f"    System has CONVERGED (stable spiral)")
+        else:
+            print(f"    System is oscillating")
+
+    print()
+
+
 if __name__ == '__main__':
     experiment_1_bifurcation_thresholds()
     experiment_2_limit_cycle_prediction()
     experiment_3_schedule_comparison()
     experiment_4_frequency_verification()
     experiment_5_hopf_scaling()
+    experiment_6_lq_game_bifurcation()
 
     print("=" * 60)
     print("All experiments complete.")

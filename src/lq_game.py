@@ -119,26 +119,32 @@ class LQAlignmentGame:
         """
         Canonical 2-D example (x in R^2, y in R^2).
 
+        Uses rotation-like cross-coupling (A12, A21 have skew-symmetric
+        components) to produce complex eigenvalues, enabling a Hopf
+        bifurcation as beta varies. The adversary cost delta=10.0 ensures
+        the zero-sum ARE admits a stabilizing solution over a wide range
+        of beta values.
+
         Parameters
         ----------
         beta : float
             KL penalty strength.
         """
-        A11 = np.array([[-0.5, 0.0],
+        A11 = np.array([[-0.3, 0.0],
                         [ 0.0,-0.3]])
-        A12 = np.array([[ 0.8, 0.2],
-                        [ 0.1, 0.6]])
-        A21 = np.array([[ 0.4, 0.1],
-                        [ 0.3, 0.5]])
-        A22 = np.array([[-0.4, 0.0],
-                        [ 0.0,-0.6]])
+        A12 = np.array([[ 0.5, 0.8],
+                        [-0.8, 0.5]])
+        A21 = np.array([[ 0.4, 0.3],
+                        [-0.3, 0.4]])
+        A22 = np.array([[-0.5, 0.0],
+                        [ 0.0,-0.5]])
         B1 = np.eye(2)
         B2 = np.eye(2)
         Q  = np.eye(2)
         R  = 0.5 * np.eye(2)
-        S  = 0.3 * np.eye(2)
+        S  = 0.1 * np.eye(2)
         gamma = 1.0
-        delta = 1.0
+        delta = 10.0
         return cls(A11=A11, A12=A12, A21=A21, A22=A22,
                    B1=B1, B2=B2, Q=Q, R=R, S=S,
                    gamma=gamma, delta=delta, beta=beta)
