@@ -234,11 +234,10 @@ def compute_bifurcation_diagram(
         traj = sim_fn(z0, T, dt, beta=beta, params=p)
         n = len(traj['z'])
         tail = traj['z'][int(0.7 * n):]
-        if model == '2d':
-            norms = np.sqrt(tail[:, 0]**2 + tail[:, 1]**2)
-        else:
-            norms = np.sqrt(tail[:, 0]**2 + tail[:, 1]**2)
-        amplitudes[i] = norms.max() - norms.min()
+        # Use a single Cartesian component to measure oscillation amplitude;
+        # the radius is constant on a limit cycle, so max-min of ||z|| ≈ 0.
+        x1_tail = tail[:, 0]
+        amplitudes[i] = (x1_tail.max() - x1_tail.min()) / 2.0
 
     return {
         'betas': betas,

@@ -82,8 +82,9 @@ We reformulate LLM alignment as a \emph{continuous-time two-player zero-sum diff
 We make three contributions.
 \textbf{(i)}~We derive the Hamilton--Jacobi--Isaacs (HJI) equation governing the value of this game and show that, under a linear-quadratic (LQ) approximation around a locally optimal policy, Nash equilibria are fully characterized by a coupled algebraic Riccati equation admitting a closed-form stabilizing solution.
 \textbf{(ii)}~We identify a Hopf bifurcation in the closed-loop dynamics: there exists a critical KL penalty~$\beta_c$ such that $\beta > \beta_c$ yields asymptotic convergence (stable spiral) while $\beta < \beta_c$ produces sustained reward-hacking limit cycles, and we give the cycling frequency~$\omega_c$ in closed form.
-\textbf{(iii)}~Applying Pontryagin's Maximum Principle (PMP), we derive the optimal \emph{non-constant} KL schedule~$\beta^*(t)$ that tracks the separatrix between convergence and cycling, achieving minimal regret.
-Experiments on synthetic bandit alignment games confirm the predicted bifurcation threshold, the cycling frequency, and the superiority of the PMP-derived schedule over constant and heuristic annealing baselines.
+\textbf{(iii)}~Applying Pontryagin's Maximum Principle (PMP), we derive a principled \emph{non-constant} KL schedule~$\beta^*(t)$ that tracks the separatrix between convergence and cycling.
+Experiments on synthetic alignment games confirm the predicted bifurcation threshold and cycling frequency.
+Schedule comparisons show that non-constant schedules (including the PMP-derived one) dramatically outperform constant baselines, with adaptive decay schedules reducing regret by up to $90\%$.
 \end{abstract}
 
 % ======================================================================
@@ -96,8 +97,8 @@ Reinforcement learning from human feedback (RLHF) has become the dominant paradi
 The standard pipeline---train a reward model on preference data, then optimize the policy against this proxy reward while penalizing divergence from a reference policy via a KL term---can be understood as an \emph{implicit game}: the policy seeks to maximize reward while the reward model (or, more broadly, the environment) may present an adversarial distribution over queries.
 This game-theoretic view has been made explicit in a series of recent works.
 \citet{munos2024nash} introduced \emph{Nash-RLHF}, casting alignment as a two-player constant-sum game between the policy and a ``dueling'' comparator, with the solution concept being a Nash equilibrium in the space of mixed policies.
-\citet{inpo2025} proposed \emph{INPO}, an implicit Nash policy optimization method that avoids the inner loop of Nash-RLHF by deriving a single-player reduction.
-\citet{starlhf2024} developed \emph{STA-RLHF}, a Stackelberg formulation in which the policy leads and the adversary follows, yielding training stability guarantees under discrete-time updates.
+\citet{inpo2025} proposed \emph{INPO}, an iterative Nash policy optimization method based on no-regret learning that avoids explicit win-rate estimation.
+\citet{starlhf2024} introduced Self-Play Preference Optimization (SPO), framing preference learning as a zero-sum game and proving that a single agent playing against itself can find the minimax winner without a reward model.
 A complementary line of work studies the \emph{fundamental limits} of RLHF through the lens of reward over-optimization~\citep{gao2023scaling}, establishing regret bounds for fixed KL budgets.
 
 Despite their conceptual appeal, all existing game-theoretic RLHF formulations operate in \emph{discrete time}: updates occur at iteration indices $k = 0, 1, 2, \ldots$, and convergence is analyzed via contraction arguments or potential functions on the iterate sequence.
@@ -109,17 +110,17 @@ This discrete viewpoint obscures three phenomena that become transparent in the 
 \end{enumerate}
 
 Our approach connects to the ``deep learning as optimal control'' paradigm initiated by \citet{e2017proposal}, who observed that residual networks are discretizations of controlled ODEs.
-This perspective was developed further by \citet{li2018optimal} and the Neural ODE framework~\citep{chen2018neural}, which parameterizes continuous dynamics directly.
+This perspective was developed further by \citet{li2018optimal}, who applied Pontryagin's maximum principle to training, and the Neural ODE framework~\citep{chen2018neural}, which parameterizes continuous dynamics directly.
 We adapt these ideas from the supervised to the RLHF setting, replacing a single controlled ODE with a \emph{two-player differential game}.
 
 \paragraph{Contributions.}
 We make three contributions, each with a precise theorem:
 \begin{enumerate}[leftmargin=1.5em,itemsep=1pt,topsep=2pt]
-  \item \textbf{Nash equilibrium via Riccati} (Theorem~\ref{thm:riccati}): Under an LQ approximation, the open-loop Nash equilibrium of the continuous-time alignment game is characterized by an algebraic Riccati equation.
-    The equilibrium exists if and only if this equation admits a stabilizing solution.
+  \item \textbf{Nash equilibrium via Riccati} (Theorem~\ref{thm:riccati}): We show that the continuous-time alignment game admits an LQ approximation whose Nash equilibrium is characterized by a classical algebraic Riccati equation~\citep{basar1999dynamic}.
+    The contribution is the \emph{formulation}---mapping RLHF dynamics onto this framework---not the Riccati theory itself.
   \item \textbf{Hopf bifurcation threshold} (Theorem~\ref{thm:hopf}): We derive a critical $\beta_c$ at which the closed-loop Jacobian's eigenvalues cross the imaginary axis.
     For $\beta > \beta_c$, the equilibrium is a stable spiral; for $\beta < \beta_c$, a supercritical Hopf bifurcation gives rise to a stable limit cycle whose frequency we compute exactly.
-  \item \textbf{Optimal KL schedule} (Theorem~\ref{thm:schedule}): Applying PMP to the outer optimization over $\beta(\cdot)$, we derive a non-constant schedule $\beta^*(t)$ that starts above $\beta_c$, decays toward it, and includes an oscillatory correction term matched to the system's natural frequency.
+  \item \textbf{Principled KL schedule} (Theorem~\ref{thm:schedule}): Applying PMP to the outer optimization over $\beta(\cdot)$, we derive a non-constant schedule $\beta^*(t)$ that starts above $\beta_c$, decays toward it, and includes an oscillatory correction term matched to the system's natural frequency. We show that all non-constant schedules dramatically outperform constant baselines.
 \end{enumerate}
 
 % ======================================================================
@@ -353,7 +354,7 @@ Implementation details and additional experiments are in the appendix.
 \paragraph{Setup.}
 We define a quadratic true reward $r^*(\btheta) = -\tfrac{1}{2}\|\btheta - \btheta^*\|^2$ and a misspecified proxy $r_\bphi(\btheta) = -\tfrac{1}{2}\|\btheta - \bphi\|^2$, where $\bphi$ drifts under adversarial control.
 The KL penalty is $\beta\,\tfrac{1}{2}\|\btheta - \btheta_{\mathrm{ref}}\|^2$.
-We discretize the continuous-time dynamics using a fourth-order Runge--Kutta scheme with step size $h = 5 \times 10^{-3}$.
+We discretize the nonlinear dynamics using a fourth-order Runge--Kutta scheme with step size $h = 5 \times 10^{-3}$; the LQ game simulations use forward Euler with the same step size.
 
 \paragraph{Phase portraits (Figure~\ref{fig:phase}).}
 Figure~\ref{fig:phase} shows phase portraits of the $(\theta_1, \phi_1)$ subsystem for $\beta = 2\beta_c$ (stable spiral, left) and $\beta = 0.5\beta_c$ (limit cycle, right).
@@ -367,8 +368,9 @@ The predicted bifurcation threshold is $\beta_c = 0.5000$ (2D) and $\beta_c = 0.
 \end{figure}
 
 \paragraph{Limit cycle radius verification.}
-We verify the analytical prediction $r_{\mathrm{eq}} = \sqrt{(a - \beta)/\mu}$ from the Hopf normal form at six values of $\beta/\beta_c \in \{0.30, 0.50, 0.70, 0.80, 0.90, 0.95\}$.
-After simulating for $T = 300$ time units and measuring the mean radius in the last 30\% of the trajectory, the relative error is $0.00\%$ at all six points, confirming the exactness of the normal form reduction.
+As a consistency check, we verify that the RK4 numerical integration correctly reproduces the analytical steady-state radius $r_{\mathrm{eq}} = \sqrt{(a - \beta)/\mu}$ of the Hopf normal form at six values of $\beta/\beta_c \in \{0.30, 0.50, 0.70, 0.80, 0.90, 0.95\}$.
+The agreement is exact to numerical precision, as expected since the normal form has this radius as an exact fixed point of the polar dynamics.
+The more substantive test is whether the \emph{4D model}---which is \emph{not} in normal form---exhibits the predicted bifurcation structure, which we verify next.
 
 \paragraph{Bifurcation diagram and cycling frequency (Figure~\ref{fig:bifurcation}).}
 Figure~\ref{fig:bifurcation}(a) plots the asymptotic oscillation amplitude as a function of $\beta/\beta_c$, confirming the $O(\sqrt{\beta_c - \beta})$ scaling predicted by Theorem~\ref{thm:hopf}.
@@ -413,7 +415,7 @@ PMP (analytical) & 1.249 & 0.0000 \\
     \includegraphics[width=\textwidth]{figures/regret_comparison.pdf}
     \caption{Cumulative regret for four KL schedules.}
   \end{subfigure}
-  \caption{\textbf{(a)} Bifurcation diagram confirming the $\sqrt{\beta_c - \beta}$ amplitude scaling (solid: theory, circles: simulation). \textbf{(b)} Regret comparison showing the PMP-optimal schedule~\eqref{eq:beta_star} outperforms constant and linear baselines.}
+  \caption{\textbf{(a)} Bifurcation diagram confirming the $\sqrt{\beta_c - \beta}$ amplitude scaling (solid: theory, circles: simulation). \textbf{(b)} Cumulative regret for five KL schedules. Non-constant decay schedules dramatically outperform constant baselines; the PMP schedule~\eqref{eq:beta_star} outperforms constant $\beta$ but is slightly worse than cosine/linear decay in this low-dimensional setting.}
   \label{fig:bifurcation}
 \end{figure}
 
@@ -426,12 +428,12 @@ PMP (analytical) & 1.249 & 0.0000 \\
 \paragraph{Game-theoretic RLHF.}
 \citet{munos2024nash} formulated RLHF as a two-player game with Nash equilibrium solutions, solved via mirror descent.
 \citet{inpo2025} eliminated the inner loop via an implicit reduction.
-\citet{starlhf2024} studied Stackelberg formulations.
-\citet{chakraborty2025fundamental} derived fundamental limits of RLHF through minimax regret bounds.
+\citet{starlhf2024} studied minimax self-play formulations.
+\citet{casper2023open} surveyed open problems and fundamental limitations of RLHF.
 All these works use discrete-time analysis; our continuous-time formulation reveals phenomena (Hopf bifurcations, optimal control schedules) inaccessible to iterate-level reasoning.
 
 \paragraph{Deep learning as dynamical systems.}
-\citet{e2017proposal} proposed viewing deep residual networks as discretized ODEs, a perspective formalized by Neural ODEs~\citep{chen2018neural} and extended to mean-field games by \citet{li2018optimal}.
+\citet{e2017proposal} proposed viewing deep residual networks as discretized ODEs, a perspective formalized by Neural ODEs~\citep{chen2018neural}. \citet{li2018optimal} developed an optimal control approach to deep learning using Pontryagin's maximum principle.
 We adapt this ``learning as optimal control'' lens from supervised learning to the RLHF game, replacing a single ODE with a two-player differential game.
 
 \paragraph{Reward hacking and over-optimization.}
@@ -475,10 +477,10 @@ Y.~Bai, A.~Jones, K.~Ndousse, A.~Askell, A.~Chen, N.~DaSilva, D.~Drain, S.~Fort,
 \newblock Training a helpful and harmless assistant with reinforcement learning from human feedback.
 \newblock \emph{arXiv preprint arXiv:2204.05862}, 2022.
 
-\bibitem[Chakraborty et~al.(2025)]{chakraborty2025fundamental}
-S.~Chakraborty, A.~Pacchiano, and A.~Raghunathan.
-\newblock On the fundamental limits of {RLHF}.
-\newblock In \emph{Proceedings of ICML}, 2025.
+\bibitem[Casper et~al.(2023)]{casper2023open}
+S.~Casper, X.~Davies, C.~Shi, T.~K. Gilbert, J.~Scheurer, J.~Rando, R.~Freedman, T.~Korbak, D.~Lindner, et~al.
+\newblock Open problems and fundamental limitations of reinforcement learning from human feedback.
+\newblock \emph{arXiv preprint arXiv:2307.15217}, 2023.
 
 \bibitem[Chen et~al.(2018)]{chen2018neural}
 R.~T.~Q. Chen, Y.~Rubanova, J.~Bettencourt, and D.~Duvenaud.
@@ -505,8 +507,8 @@ R.~Isaacs.
 \newblock \emph{Differential Games: A Mathematical Theory with Applications to Warfare and Pursuit, Control and Optimization}.
 \newblock John Wiley \& Sons, 1965.
 
-\bibitem[Li and Haber(2018)]{li2018optimal}
-Q.~Li and E.~Haber.
+\bibitem[Li and Hao(2018)]{li2018optimal}
+Q.~Li and S.~Hao.
 \newblock An optimal control approach to deep learning and applications to discrete-weight neural networks.
 \newblock In \emph{Proceedings of ICML}, 2018.
 
@@ -521,13 +523,13 @@ L.~Ouyang, J.~Wu, X.~Jiang, D.~Almeida, C.~L. Wainwright, P.~Mishkin, C.~Zhang, 
 \newblock In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2022.
 
 \bibitem[Swamy et~al.(2024)]{starlhf2024}
-G.~Swamy, C.~Dann, A.~Raghunathan, S.~Wu, and J.~A. Bagnell.
+G.~Swamy, C.~Dann, R.~Kidambi, Z.~S. Wu, and A.~Agarwal.
 \newblock A minimaximalist approach to reinforcement learning from human feedback.
-\newblock In \emph{Reinforcement Learning Conference (RLC)}, 2024.
+\newblock In \emph{Proceedings of ICML}, 2024.
 
 \bibitem[Zhang et~al.(2025)]{inpo2025}
-Y.~Zhang, Z.~Zheng, H.~Zhao, and Z.~Yang.
-\newblock Implicit {N}ash policy optimization for alignment.
+Y.~Zhang, D.~Yu, B.~Peng, L.~Song, Y.~Tian, M.~Huo, N.~Jiang, H.~Mi, and D.~Yu.
+\newblock Iterative {N}ash policy optimization: Aligning {LLM}s with general preferences via no-regret learning.
 \newblock In \emph{Proceedings of ICLR}, 2025.
 
 \end{thebibliography}

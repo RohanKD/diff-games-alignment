@@ -131,11 +131,11 @@ def fig_bifurcation():
     betas = bif['betas']
     amps = bif['amplitudes']
 
-    # Theoretical curve: amplitude = max - min of r(t) on limit cycle = 2*r_eq
+    # Theoretical curve: amplitude of x1 oscillation = r_eq = sqrt((a-beta)/mu)
     theory_beta = np.linspace(0.01, 1.0, 500)
     theory_amp = np.where(
         theory_beta < a,
-        2.0 * np.sqrt((a - theory_beta) / mu),
+        np.sqrt((a - theory_beta) / mu),
         0.0,
     )
 
@@ -143,7 +143,7 @@ def fig_bifurcation():
     ax.scatter(betas / beta_c, amps, s=18, color='C0', zorder=3,
                label='Simulation', edgecolors='none', alpha=0.8)
     ax.plot(theory_beta / beta_c, theory_amp, 'C3-', linewidth=1.5,
-            label=r'Theory: $2\sqrt{(a-\beta)/\mu}$')
+            label=r'Theory: $\sqrt{(a-\beta)/\mu}$')
     ax.axvline(1.0, color='grey', linestyle='--', linewidth=1.0,
                label=r'$\beta_c$')
 
