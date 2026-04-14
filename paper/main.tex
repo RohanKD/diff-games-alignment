@@ -77,14 +77,14 @@ Equilibrium Structure and Optimal Training Schedules}
 % ABSTRACT
 % ======================================================================
 \begin{abstract}
-Game-theoretic formulations of reinforcement learning from human feedback (RLHF)---including NLHF~\citep{munos2024nash}, INPO~\citep{inpo2025}, and SPO~\citep{starlhf2024}---model alignment as a strategic interaction between a policy and an adversary, yet all operate exclusively in discrete time.
+Game-theoretic formulations of reinforcement learning from human feedback (RLHF)---including NLHF~\citep{munos2024nash}, INPO~\citep{inpo2025}, and \citet{starlhf2024}---model alignment as a strategic interaction between a policy and an adversary, yet all operate exclusively in discrete time.
 We reformulate LLM alignment as a \emph{continuous-time two-player zero-sum differential game} in which the policy player maximizes a reward-minus-KL objective and the adversary (representing distributional shift or reward misspecification) seeks to degrade it.
 We make three contributions.
 \textbf{(i)}~We derive the Hamilton--Jacobi--Isaacs (HJI) equation governing the value of this game and show that, under a linear-quadratic (LQ) approximation around a locally optimal policy, Nash equilibria are characterized by an algebraic Riccati equation~\citep{basar1999dynamic}.
 \textbf{(ii)}~We identify a Hopf bifurcation in the closed-loop dynamics: there exists a critical KL penalty~$\beta_c$ such that $\beta > \beta_c$ yields asymptotic convergence (stable spiral) while $\beta < \beta_c$ produces reward-hacking oscillations, with a computable cycling frequency~$\omega_c$.
 \textbf{(iii)}~Applying Pontryagin's Maximum Principle (PMP), we derive a principled \emph{non-constant} KL schedule~$\beta^*(t)$ that tracks the separatrix between convergence and cycling.
 Experiments on synthetic alignment games confirm the predicted bifurcation threshold and cycling frequency.
-Schedule comparisons show that non-constant decay schedules substantially outperform constant baselines, reducing regret by $28$--$41\%$ relative to a well-tuned constant $\beta = 1.5\beta_c$.
+Schedule comparisons show that non-constant schedules outperform constant baselines, with the best (cosine annealing) reducing regret by $41\%$ relative to a well-tuned constant $\beta = 1.5\beta_c$.
 \end{abstract}
 
 % ======================================================================
@@ -98,7 +98,7 @@ The standard pipeline---train a reward model on preference data, then optimize t
 This game-theoretic view has been made explicit in a series of recent works.
 \citet{munos2024nash} introduced Nash Learning from Human Feedback (NLHF), casting alignment as a two-player constant-sum game between the policy and a ``dueling'' comparator, with the solution concept being a Nash equilibrium in the space of mixed policies.
 \citet{inpo2025} proposed \emph{INPO}, an iterative Nash policy optimization method based on no-regret learning that avoids explicit win-rate estimation.
-\citet{starlhf2024} introduced Self-Play Preference Optimization (SPO), framing preference learning as a zero-sum game and proving that a single agent playing against itself can find the minimax winner without a reward model.
+\citet{starlhf2024} framed preference learning as a zero-sum game and showed that a single agent playing against itself can find the minimax winner without a reward model.
 A complementary line of work studies reward over-optimization empirically~\citep{gao2023scaling}, finding scaling laws that characterize how excess proxy reward grows with KL budget.
 
 Despite their conceptual appeal, all existing game-theoretic RLHF formulations operate in \emph{discrete time}: updates occur at iteration indices $k = 0, 1, 2, \ldots$, and convergence is analyzed via contraction arguments or potential functions on the iterate sequence.
@@ -235,14 +235,15 @@ This is a standard LQ differential game~\citep{basar1999dynamic}.
 \begin{theorem}[Nash Equilibrium via Riccati]
 \label{thm:riccati}
 Consider the LQ alignment game~\eqref{eq:lq_dynamics} with cost matrices $\bQ \succ 0$, policy effort $\gamma > 0$, and adversary cost $\delta > 0$.
-Define $\bS = \bB_1\bB_1^\top/\gamma - \bB_2\bB_2^\top/\delta$ and $\widetilde{\bQ} = \bQ$.
+Let $\bB_{1,\mathrm{f}} = [\bB_1; \bm{0}]$ and $\bB_{2,\mathrm{f}} = [\bm{0}; \bB_2]$ denote the zero-padded control matrices over the full state $\tilde{\bz} = (\tilde{\btheta}, \tilde{\bphi})$.
+Define $\bS = \bB_{1,\mathrm{f}}\bB_{1,\mathrm{f}}^\top/\gamma - \bB_{2,\mathrm{f}}\bB_{2,\mathrm{f}}^\top/\delta$ and $\widetilde{\bQ} = [[\bQ, \bm{S}_c],[\bm{S}_c^\top, \bR]]$, where $\bm{S}_c$ is the cross-coupling cost from~\eqref{eq:lq_dynamics}.
 The open-loop Nash equilibrium is characterized by the algebraic Riccati equation
 \begin{equation}
   \bA^\top \bP + \bP\bA + \widetilde{\bQ} - \bP\,\bS\,\bP = 0,
   \label{eq:riccati}
 \end{equation}
 and the equilibrium exists if and only if~\eqref{eq:riccati} admits a stabilizing solution $\bP \succ 0$ (i.e., $\bA + \bS\bP$ is Hurwitz).
-The Nash equilibrium controls are $\bu^*(t) = \frac{1}{\gamma}\bB_1^\top \bP\,\tilde{\bz}(t)$ and $\bv^*(t) = -\frac{1}{\delta}\bB_2^\top \bP\,\tilde{\bz}(t)$.
+The Nash equilibrium controls are $\bu^*(t) = \frac{1}{\gamma}\bB_{1,\mathrm{f}}^\top \bP\,\tilde{\bz}(t)$ and $\bv^*(t) = -\frac{1}{\delta}\bB_{2,\mathrm{f}}^\top \bP\,\tilde{\bz}(t)$.
 \end{theorem}
 
 \begin{proof}[Proof sketch]

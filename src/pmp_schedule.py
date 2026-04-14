@@ -63,19 +63,19 @@ def cosine_schedule(
 
 def analytical_schedule(
     beta_c: float,
+    alpha: float = 1.5,
     eta: float = 0.5,
     mu: float = 0.1,
     omega: float = 1.0,
     psi: float = 0.0,
 ) -> Callable[[float], float]:
     """
-    Analytical approximation derived from the bifurcation normal form:
+    PMP-motivated schedule (Theorem 3):
 
-        beta*(t) = beta_c * (1 + eta * exp(-mu*t) * cos(omega*t + psi))
+        beta*(t) = beta_c * (alpha + eta * exp(-mu*t) * cos(omega*t + psi))
 
-    This starts above beta_c (strong KL penalty) and decays toward it
-    in a damped-oscillatory fashion that tracks the natural frequency
-    of the Hopf cycle, keeping the system near the stability boundary.
+    Starts above beta_c and decays toward alpha*beta_c > beta_c,
+    maintaining a margin above the bifurcation threshold at all times.
 
     Parameters
     ----------
@@ -92,7 +92,7 @@ def analytical_schedule(
         Phase offset.
     """
     def _schedule(t):
-        return beta_c * (1.0 + eta * np.exp(-mu * t) * np.cos(omega * t + psi))
+        return beta_c * (alpha + eta * np.exp(-mu * t) * np.cos(omega * t + psi))
     return _schedule
 
 
