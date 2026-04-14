@@ -99,6 +99,18 @@ def solve_riccati_hamiltonian(game: "LQAlignmentGame") -> Optional[np.ndarray]:
     P = X2 @ np.linalg.inv(X1)
     P = np.real(P)  # Discard numerical imaginary residual
     P = 0.5 * (P + P.T)  # Symmetrize
+
+    # Check if the solution is stabilizing
+    S = _compute_S(game)
+    J_cl = A + S @ P
+    max_re = max(np.linalg.eigvals(J_cl).real)
+    if max_re > 1e-6:
+        warnings.warn(
+            f"Riccati solution is NOT stabilizing at beta = {game.beta:.4f} "
+            f"(max Re(eig) = {max_re:.4f}). The system is beyond the "
+            f"bifurcation threshold."
+        )
+
     return P
 
 

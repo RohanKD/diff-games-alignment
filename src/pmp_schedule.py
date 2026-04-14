@@ -168,7 +168,7 @@ def solve_pmp_schedule(
     def _get_Jcl(beta_val):
         """Closed-loop Jacobian at a given beta."""
         g = game.with_beta(beta_val)
-        P = _riccati.solve_riccati(g)
+        P = _riccati.solve_riccati_direct(g)
         if P is None:
             return None
         J_cl, _ = _riccati.closed_loop_jacobian(g, P)

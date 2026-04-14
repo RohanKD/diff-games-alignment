@@ -77,11 +77,11 @@ Equilibrium Structure and Optimal Training Schedules}
 % ABSTRACT
 % ======================================================================
 \begin{abstract}
-Game-theoretic formulations of reinforcement learning from human feedback (RLHF)---including Nash-RLHF, INPO, and STA-RLHF---model alignment as a strategic interaction between a policy and an adversary, yet all operate exclusively in discrete time.
+Game-theoretic formulations of reinforcement learning from human feedback (RLHF)---including NLHF~\citep{munos2024nash}, INPO~\citep{inpo2025}, and SPO~\citep{starlhf2024}---model alignment as a strategic interaction between a policy and an adversary, yet all operate exclusively in discrete time.
 We reformulate LLM alignment as a \emph{continuous-time two-player zero-sum differential game} in which the policy player maximizes a reward-minus-KL objective and the adversary (representing distributional shift or reward misspecification) seeks to degrade it.
 We make three contributions.
-\textbf{(i)}~We derive the Hamilton--Jacobi--Isaacs (HJI) equation governing the value of this game and show that, under a linear-quadratic (LQ) approximation around a locally optimal policy, Nash equilibria are fully characterized by a coupled algebraic Riccati equation admitting a closed-form stabilizing solution.
-\textbf{(ii)}~We identify a Hopf bifurcation in the closed-loop dynamics: there exists a critical KL penalty~$\beta_c$ such that $\beta > \beta_c$ yields asymptotic convergence (stable spiral) while $\beta < \beta_c$ produces sustained reward-hacking limit cycles, and we give the cycling frequency~$\omega_c$ in closed form.
+\textbf{(i)}~We derive the Hamilton--Jacobi--Isaacs (HJI) equation governing the value of this game and show that, under a linear-quadratic (LQ) approximation around a locally optimal policy, Nash equilibria are characterized by an algebraic Riccati equation~\citep{basar1999dynamic}.
+\textbf{(ii)}~We identify a Hopf bifurcation in the closed-loop dynamics: there exists a critical KL penalty~$\beta_c$ such that $\beta > \beta_c$ yields asymptotic convergence (stable spiral) while $\beta < \beta_c$ produces reward-hacking oscillations, with a computable cycling frequency~$\omega_c$.
 \textbf{(iii)}~Applying Pontryagin's Maximum Principle (PMP), we derive a principled \emph{non-constant} KL schedule~$\beta^*(t)$ that tracks the separatrix between convergence and cycling.
 Experiments on synthetic alignment games confirm the predicted bifurcation threshold and cycling frequency.
 Schedule comparisons show that non-constant decay schedules substantially outperform constant baselines, reducing regret by $28$--$41\%$ relative to a well-tuned constant $\beta = 1.5\beta_c$.
@@ -241,7 +241,7 @@ The open-loop Nash equilibrium is characterized by the algebraic Riccati equatio
   \bA^\top \bP + \bP\bA + \widetilde{\bQ} - \bP\,\bS\,\bP = 0,
   \label{eq:riccati}
 \end{equation}
-and the equilibrium exists if and only if~\eqref{eq:riccati} admits a stabilizing solution $\bP \succ 0$ (i.e., $\bA - \bS\bP$ is Hurwitz).
+and the equilibrium exists if and only if~\eqref{eq:riccati} admits a stabilizing solution $\bP \succ 0$ (i.e., $\bA + \bS\bP$ is Hurwitz).
 The Nash equilibrium controls are $\bu^*(t) = \frac{1}{\gamma}\bB_1^\top \bP\,\tilde{\bz}(t)$ and $\bv^*(t) = -\frac{1}{\delta}\bB_2^\top \bP\,\tilde{\bz}(t)$.
 \end{theorem}
 
@@ -249,7 +249,7 @@ The Nash equilibrium controls are $\bu^*(t) = \frac{1}{\gamma}\bB_1^\top \bP\,\t
 In the infinite-horizon LQ game ($T \to \infty$), the value function takes the quadratic form $V(\tilde{\bz}) = \tfrac{1}{2}\tilde{\bz}^\top \bP\,\tilde{\bz}$.
 Substituting into the HJI equation~\eqref{eq:hji_alignment} and matching quadratic coefficients yields~\eqref{eq:riccati}.
 The saddle-point condition requires $\bP \succ 0$: positive definiteness ensures the policy player's problem is concave and the adversary's is convex.
-Stability of the closed-loop matrix $\bA_{\mathrm{cl}} = \bA - \bS\bP$ is necessary and sufficient for finite cost, hence for existence of the equilibrium~\citep{basar1999dynamic}.
+Stability of the closed-loop matrix $\bA_{\mathrm{cl}} = \bA + \bS\bP$ is necessary and sufficient for finite cost, hence for existence of the equilibrium~\citep{basar1999dynamic}.
 \end{proof}
 
 \begin{theorem}[Hopf Bifurcation and Cycling Threshold]
@@ -279,31 +279,32 @@ Consider the outer optimization problem of choosing a time-varying penalty $\bet
 Let $\mu > 0$ denote the spectral gap of $\bA_{\mathrm{cl}}(\beta_c)$ restricted to the stable manifold, and let $\omega_c$ be the Hopf frequency from Theorem~\ref{thm:hopf}.
 The PMP-optimal schedule satisfies, in the two-dimensional center-manifold reduction,
 \begin{equation}
-  \beta^*(t) = \beta_c\Bigl(1 + \eta\,e^{-\mu t}\cos(\omega_c t + \psi)\Bigr),
+  \beta^*(t) = \beta_c\Bigl(\alpha + \eta\,e^{-\mu t}\cos(\omega_c t + \psi)\Bigr),
   \label{eq:beta_star}
 \end{equation}
-where $\eta > 0$ and $\psi \in [0, 2\pi)$ are determined by the initial condition $\bz_0$ through the adjoint boundary-value problem.
+where $\alpha > 1$ is a constant offset ensuring $\beta^*(t) > \beta_c$ at all times, $\eta > 0$ controls the oscillation amplitude, $\mu > 0$ is a decay rate, and $\psi \in [0, 2\pi)$ is a phase.
+In practice $\alpha, \eta, \mu, \psi$ are tuned to the system; the PMP analysis motivates the \emph{functional form} (exponentially damped oscillation around a super-critical baseline) rather than providing closed-form values for these constants.
 This schedule has three properties:
 \begin{enumerate}[leftmargin=1.5em,itemsep=1pt]
-  \item \textbf{Initially conservative:} $\beta^*(0) = \beta_c(1 + \eta\cos\psi) > \beta_c$, ensuring early-stage stability.
-  \item \textbf{Asymptotic criticality:} $\beta^*(t) \to \beta_c$ as $t \to \infty$, tracking the separatrix between convergence and cycling.
-  \item \textbf{Oscillatory correction:} The $\cos(\omega_c t + \psi)$ term actively damps the system's natural oscillation mode by applying counter-phase KL modulation.
+  \item \textbf{Initially conservative:} $\beta^*(0) = \beta_c(\alpha + \eta\cos\psi) > \beta_c$, ensuring early-stage stability.
+  \item \textbf{Asymptotic super-criticality:} $\beta^*(t) \to \alpha\beta_c > \beta_c$ as $t \to \infty$, maintaining a margin above the bifurcation threshold.
+  \item \textbf{Oscillatory correction:} The $\cos(\omega_c t + \psi)$ term modulates the penalty at the system's natural frequency, damping resonant oscillation modes.
 \end{enumerate}
 \end{theorem}
 
 \begin{proof}[Proof sketch]
 We treat $\beta(t)$ as an additional control in the outer problem.
-The Hamiltonian of the outer problem includes a term $\beta(t)\,\bp_\beta^\top \nabla_\beta \bA_{\mathrm{cl}}\,\tilde{\bz}$, where $\bp_\beta$ is the adjoint variable.
-The stationarity condition $\partial \cH / \partial \beta = 0$ couples $\beta$ to the state and costate.
-On the two-dimensional center manifold at $\beta \approx \beta_c$, the adjoint system reduces to a damped oscillator with frequency $\omega_c$ and decay rate $\mu$, yielding the closed-form~\eqref{eq:beta_star}.
-The constants $\eta, \psi$ solve the two-point boundary-value problem $\tilde{\bz}(0) = \bz_0 - \bz^*$, $\bp(T) = \nabla\Phi(\tilde{\bz}(T))$.
+The Hamiltonian of the outer problem includes a term coupling $\beta$ to the state and costate.
+The stationarity condition $\partial \cH / \partial \beta = 0$ yields a two-point boundary-value problem.
+Near $\beta \approx \beta_c$, the linearized adjoint system is a damped oscillator with frequency $\omega_c$ and decay rate $\mu$, \emph{motivating} the functional form~\eqref{eq:beta_star}.
+The constants $\alpha, \eta, \mu, \psi$ must be tuned numerically for a given system; the PMP analysis provides the structural form rather than explicit values.
 \end{proof}
 
 \begin{remark}[Interpretation]
-Theorem~\ref{thm:schedule} provides a principled alternative to heuristic KL annealing.
+Theorem~\ref{thm:schedule} provides a principled \emph{functional form} for KL annealing.
 Constant schedules either over-regularize ($\beta \gg \beta_c$, slow convergence) or under-regularize ($\beta < \beta_c$, reward hacking).
-Linear decay schedules can cross $\beta_c$ too early.
-The PMP schedule~\eqref{eq:beta_star} ``surfs'' the bifurcation boundary, achieving the fastest convergence consistent with stability.
+Linear and cosine decay schedules can cross $\beta_c$, and may outperform the PMP form in practice (Table~\ref{tab:regret}).
+The PMP analysis explains \emph{why} non-constant schedules help: the exponentially-damped oscillatory structure matches the system's natural dynamics near the bifurcation.
 \end{remark}
 
 % ======================================================================
@@ -331,7 +332,7 @@ where $\kappa(\bA_{\mathrm{cl}})$ is the condition number of the eigenvector mat
 \end{proposition}
 
 This bound is tight when $\tilde{\bz}(0)$ is aligned with the most unstable eigenvector.
-It implies that reward hacking is slow when $\beta$ is only slightly below $\beta_c$ (since $\lambda_{\max} = O(\sqrt{\beta_c - \beta})$ near the bifurcation), rationalizing the empirical observation that moderate KL penalties delay but do not prevent over-optimization.
+It implies that reward hacking is slow when $\beta$ is only slightly below $\beta_c$ (since $\lambda_{\max} = O(\beta_c - \beta)$ near the bifurcation, by the transversality condition), rationalizing the empirical observation that moderate KL penalties delay but do not prevent over-optimization.
 
 % ======================================================================
 % 6. EXPERIMENTS
@@ -376,8 +377,9 @@ The Hopf scaling exponent is measured at $0.4983$, matching the theoretical pred
 \paragraph{Schedule comparison (Figure~\ref{fig:bifurcation}b).}
 Figure~\ref{fig:bifurcation}(b) compares cumulative regret $\int_0^T \|\bz(t)\|^2\,dt$ for five KL penalty schedules.
 Table~\ref{tab:regret} summarizes the results.
-The cosine annealing schedule achieves the lowest regret ($1.014$), followed closely by linear decay ($1.027$) and the PMP schedule ($1.249$).
-Constant $\beta = \beta_c$ is worst ($9.830$) due to marginal stability, while $\beta = 1.5\beta_c$ achieves $1.733$ but converges slower than the adaptive schedules.
+The cosine annealing schedule achieves the lowest regret ($1.014$), followed by linear decay ($1.027$) and the PMP schedule ($1.526$).
+Constant $\beta = \beta_c$ is worst ($9.830$) due to marginal stability, while $\beta = 1.5\beta_c$ achieves $1.733$.
+The PMP schedule underperforms the heuristic decay schedules in this setting; its value lies in providing a principled functional form (Remark~1) rather than optimal numerical performance.
 All non-constant schedules achieve convergence ($\|\bz(T)\| \approx 0$) while maintaining stability throughout.
 
 \begin{table}[h]
@@ -391,7 +393,7 @@ Constant ($\beta_c$) & 9.830 & 0.1566 \\
 Constant ($1.5\beta_c$) & 1.733 & 0.0000 \\
 Linear decay & 1.027 & 0.0000 \\
 Cosine anneal & 1.014 & 0.0000 \\
-PMP (analytical) & 1.249 & 0.0000 \\
+PMP (Thm.~\ref{thm:schedule}) & 1.526 & 0.0000 \\
 \bottomrule
 \end{tabular}
 \caption{Cumulative regret and final state norm for five KL penalty schedules on the 2D alignment game. Non-constant schedules that start above $\beta_c$ and decay achieve both convergence and low regret.}
@@ -477,7 +479,7 @@ Y.~Bai, A.~Jones, K.~Ndousse, A.~Askell, A.~Chen, N.~DaSilva, D.~Drain, S.~Fort,
 \bibitem[Casper et~al.(2023)]{casper2023open}
 S.~Casper, X.~Davies, C.~Shi, T.~K. Gilbert, J.~Scheurer, J.~Rando, R.~Freedman, T.~Korbak, D.~Lindner, et~al.
 \newblock Open problems and fundamental limitations of reinforcement learning from human feedback.
-\newblock \emph{arXiv preprint arXiv:2307.15217}, 2023.
+\newblock \emph{Transactions on Machine Learning Research (TMLR)}, 2023.
 
 \bibitem[Chen et~al.(2018)]{chen2018neural}
 R.~T.~Q. Chen, Y.~Rubanova, J.~Bettencourt, and D.~Duvenaud.

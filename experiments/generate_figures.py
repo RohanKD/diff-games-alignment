@@ -173,7 +173,7 @@ def fig_regret_comparison():
         r'Constant $1.5\beta_c$': lambda t: 1.5 * beta_c,
         'Linear decay': lambda t: 2 * beta_c + (0.5 * beta_c - 2 * beta_c) * t / T,
         'Cosine anneal': lambda t: 0.5 * beta_c + 0.5 * (2 * beta_c - 0.5 * beta_c) * (1 + np.cos(np.pi * t / T)),
-        'PMP (analytical)': lambda t: beta_c * (1.5 + 0.5 * np.exp(-0.03 * t) * np.cos(0.5 * omega_0 * t)),
+        'PMP (Thm. 3)': lambda t: beta_c * (1.5 + 0.5 * np.exp(-0.03 * t) * np.cos(omega_0 * t)),
     }
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
