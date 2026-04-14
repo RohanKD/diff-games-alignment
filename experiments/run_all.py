@@ -80,7 +80,7 @@ def experiment_3_schedule_comparison():
         'Constant (1.5*beta_c)': lambda t: 1.5 * beta_c,
         'Linear decay': lambda t: 2*beta_c + (0.5*beta_c - 2*beta_c) * t / T,
         'Cosine anneal': lambda t: 0.5*beta_c + 0.5*(2*beta_c - 0.5*beta_c) * (1 + np.cos(np.pi * t / T)),
-        # PMP schedule from Theorem 3: beta_c*(1 + eta*exp(-mu*t)*cos(omega_c*t))
+        # PMP schedule from Proposition 3: beta_c*(1 + eta*exp(-mu*t)*cos(omega_c*t))
         # eta=0.5, mu estimated from spectral gap, omega_c = omega_0 for 2D model
         'PMP (Thm. 3)': lambda t: beta_c * (1.5 + 0.5 * np.exp(-0.03*t) * np.cos(omega_0*t)),
     }
@@ -88,7 +88,8 @@ def experiment_3_schedule_comparison():
     for name, sched in schedules.items():
         traj = simulate_2d(z0, T, dt, beta_schedule=sched)
         z_norm_sq = traj['z'][:, 0]**2 + traj['z'][:, 1]**2
-        regret = np.trapezoid(z_norm_sq, traj['t'])
+        _trapz = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
+        regret = _trapz(z_norm_sq, traj['t'])
         final_r = traj['r'][-1]
         print(f"  {name:25s}: regret = {regret:8.3f}, final ||z|| = {final_r:.4f}")
 
@@ -250,6 +251,25 @@ def experiment_6_lq_game_bifurcation():
     print()
 
 
+def experiment_7_pmp_bvp_solver():
+    """E7: Run the PMP BVP solver on the LQ game."""
+    print("=" * 60)
+    print("Experiment 7: PMP BVP Solver (LQ Game)")
+    print("=" * 60)
+
+    from src.lq_game import LQAlignmentGame
+    from src.pmp_schedule import solve_pmp_schedule
+
+    game = LQAlignmentGame.default_2d(beta=1.0)
+    result = solve_pmp_schedule(game, T=50.0, dt=0.05, n_mesh=100, max_iter=50)
+
+    print(f"  Converged: {result['converged']}")
+    print(f"  Time grid: {len(result['t'])} points, t in [{result['t'][0]:.1f}, {result['t'][-1]:.1f}]")
+    print(f"  beta range: [{result['beta'].min():.4f}, {result['beta'].max():.4f}]")
+    print(f"  beta(0) = {result['beta'][0]:.4f}, beta(T) = {result['beta'][-1]:.4f}")
+    print()
+
+
 if __name__ == '__main__':
     experiment_1_bifurcation_thresholds()
     experiment_2_limit_cycle_prediction()
@@ -257,6 +277,7 @@ if __name__ == '__main__':
     experiment_4_frequency_verification()
     experiment_5_hopf_scaling()
     experiment_6_lq_game_bifurcation()
+    experiment_7_pmp_bvp_solver()
 
     print("=" * 60)
     print("All experiments complete.")

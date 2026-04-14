@@ -2,16 +2,16 @@
 Linear-Quadratic differential game model for RLHF alignment.
 
 Models RLHF as a two-player zero-sum differential game where:
-  - Player 1 (policy trainer) controls u to minimize the cost
-  - Player 2 (adversarial reward model) controls v to maximize the cost
+  - Player 1 (policy trainer) controls u to maximize the payoff
+  - Player 2 (adversarial reward model) controls v to minimize the payoff
   - State z = (x, y) tracks deviations from optimal policy/reward parameters
 
 Dynamics:
     dx/dt = A11 x + A12 y + B1 u
     dy/dt = A21 x + A22 y + B2 v
 
-Payoff (Player 1 minimizes, Player 2 maximizes):
-    J = int_0^T { x^T Q x + y^T R y + 2 x^T S y
+Payoff (Player 1 maximizes, Player 2 minimizes):
+    J = int_0^T { -x^T Q x - y^T R y - 2 x^T S y
                    - (gamma/2)||u||^2 + (delta/2)||v||^2 } dt
 """
 

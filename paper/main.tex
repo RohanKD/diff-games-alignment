@@ -40,6 +40,7 @@
 \newcommand{\bR}{\bm{R}}
 \newcommand{\bF}{\bm{F}}
 \newcommand{\bI}{\bm{I}}
+\newcommand{\bS}{\bm{S}}
 \newcommand{\cH}{\mathcal{H}}
 \newcommand{\cJ}{\mathcal{J}}
 \newcommand{\cL}{\mathcal{L}}
@@ -105,7 +106,7 @@ Despite their conceptual appeal, all existing game-theoretic RLHF formulations o
 This discrete viewpoint obscures three phenomena that become transparent in the continuous-time limit:
 \begin{enumerate}[leftmargin=1.5em,itemsep=1pt,topsep=2pt]
   \item \textbf{Equilibrium geometry.} The Nash equilibrium of the alignment game, when it exists, is the solution of a Hamilton--Jacobi--Isaacs PDE whose characteristics reveal the curvature of the reward landscape and the geometry of the policy manifold.
-  \item \textbf{Exact cycling thresholds.} The transition from convergent training to periodic reward-hacking oscillations is a \emph{Hopf bifurcation}---a codimension-one phenomenon with a sharp critical parameter $\beta_c$ that cannot be captured by asymptotic discrete-time analysis.
+  \item \textbf{Exact cycling thresholds.} The transition from convergent training to periodic reward-hacking oscillations is a \emph{Hopf bifurcation}---a codimension-one phenomenon with a sharp critical parameter $\beta_c$. While discrete-time systems have an analogous Neimark--Sacker bifurcation, the continuous-time formulation yields cleaner expressions for the threshold and frequency, and connects directly to classical optimal control tools.
   \item \textbf{Optimal schedules via optimal control.} Pontryagin's Maximum Principle (PMP) transforms the problem of finding the best KL penalty schedule into a boundary-value ODE, yielding closed-form solutions in the LQ regime.
 \end{enumerate}
 
@@ -120,7 +121,7 @@ We make three contributions, each with a precise theorem:
     The contribution is the \emph{formulation}---mapping RLHF dynamics onto this framework---not the Riccati theory itself.
   \item \textbf{Hopf bifurcation threshold} (Theorem~\ref{thm:hopf}): We derive a critical $\beta_c$ at which the closed-loop Jacobian's eigenvalues cross the imaginary axis.
     For $\beta > \beta_c$, the equilibrium is a stable spiral; for $\beta < \beta_c$, a supercritical Hopf bifurcation gives rise to a stable limit cycle whose frequency we compute exactly.
-  \item \textbf{Principled KL schedule} (Theorem~\ref{thm:schedule}): Applying PMP to the outer optimization over $\beta(\cdot)$, we derive a non-constant schedule $\beta^*(t)$ that starts above $\beta_c$, decays toward it, and includes an oscillatory correction term matched to the system's natural frequency. We show that all non-constant schedules dramatically outperform constant baselines.
+  \item \textbf{Principled KL schedule} (Proposition~\ref{thm:schedule}): Applying PMP to the outer optimization over $\beta(\cdot)$, we motivate a non-constant schedule $\beta^*(t)$ that starts above $\beta_c$, decays toward it, and includes an oscillatory correction term matched to the system's natural frequency. We show that all non-constant schedules dramatically outperform constant baselines.
 \end{enumerate}
 
 % ======================================================================
@@ -215,7 +216,7 @@ The opposing signs of the last two terms reflect the game's zero-sum nature: the
 Let $\bz^* = (\btheta^*, \bphi^*)$ be a stationary point satisfying $\bF_0(\bz^*) = 0$.
 Setting $\tilde{\bz} = \bz - \bz^*$ and linearizing:
 \begin{equation}
-  \dot{\tilde{\bz}} = \bA\,\tilde{\bz} + \bB_1 \bu + \bB_2 \bv, \qquad
+  \dot{\tilde{\bz}} = \bA\,\tilde{\bz} + \bB_{1,\mathrm{f}} \bu + \bB_{2,\mathrm{f}} \bv, \qquad
   \bA = \nabla_\bz \bF_0\big|_{\bz^*} =
   \begin{pmatrix}
     \bA_{11} & \bA_{12} \\
@@ -223,7 +224,8 @@ Setting $\tilde{\bz} = \bz - \bz^*$ and linearizing:
   \end{pmatrix},
   \label{eq:lq_dynamics}
 \end{equation}
-with quadratic running cost $\ell = \tfrac{1}{2}\tilde{\bz}^\top \bQ\,\tilde{\bz} - \tfrac{\gamma}{2}\|\bu\|^2 + \tfrac{\delta}{2}\|\bv\|^2$, where $\bQ = -\nabla^2_\bz(r^* - \beta\,\KL)\big|_{\bz^*}$.
+where $\bB_{1,\mathrm{f}} = [\bB_1; \bm{0}]$ and $\bB_{2,\mathrm{f}} = [\bm{0}; \bB_2]$ are the zero-padded control matrices over the full state $\tilde{\bz} = (\tilde{\btheta}, \tilde{\bphi})$.
+The quadratic payoff (Player 1 maximizes, Player 2 minimizes) is $J = \int_0^T \bigl\{-\tfrac{1}{2}\tilde{\bz}^\top \widetilde{\bQ}\,\tilde{\bz} - \tfrac{\gamma}{2}\|\bu\|^2 + \tfrac{\delta}{2}\|\bv\|^2\bigr\}\,dt$, where $\widetilde{\bQ} = -\nabla^2_\bz(r^* - \beta\,\KL)\big|_{\bz^*} \succ 0$ (the negated Hessian of the concave objective) decomposes as $\widetilde{\bQ} = [[\bQ, \bm{S}_c],[\bm{S}_c^\top, \bR]]$ with $\bQ$ acting on $\tilde{\btheta}$ and $\bR$ on $\tilde{\bphi}$.
 This is a standard LQ differential game~\citep{basar1999dynamic}.
 
 % ======================================================================
@@ -234,9 +236,8 @@ This is a standard LQ differential game~\citep{basar1999dynamic}.
 
 \begin{theorem}[Nash Equilibrium via Riccati]
 \label{thm:riccati}
-Consider the LQ alignment game~\eqref{eq:lq_dynamics} with cost matrices $\bQ \succ 0$, policy effort $\gamma > 0$, and adversary cost $\delta > 0$.
-Let $\bB_{1,\mathrm{f}} = [\bB_1; \bm{0}]$ and $\bB_{2,\mathrm{f}} = [\bm{0}; \bB_2]$ denote the zero-padded control matrices over the full state $\tilde{\bz} = (\tilde{\btheta}, \tilde{\bphi})$.
-Define $\bS = \bB_{1,\mathrm{f}}\bB_{1,\mathrm{f}}^\top/\gamma - \bB_{2,\mathrm{f}}\bB_{2,\mathrm{f}}^\top/\delta$ and $\widetilde{\bQ} = [[\bQ, \bm{S}_c],[\bm{S}_c^\top, \bR]]$, where $\bm{S}_c$ is the cross-coupling cost from~\eqref{eq:lq_dynamics}.
+Consider the LQ alignment game~\eqref{eq:lq_dynamics} with cost matrix $\widetilde{\bQ} \succ 0$, policy effort $\gamma > 0$, and adversary cost $\delta > 0$.
+Define $\bS = \bB_{1,\mathrm{f}}\bB_{1,\mathrm{f}}^\top/\gamma - \bB_{2,\mathrm{f}}\bB_{2,\mathrm{f}}^\top/\delta$.
 The open-loop Nash equilibrium is characterized by the algebraic Riccati equation
 \begin{equation}
   \bA^\top \bP + \bP\bA + \widetilde{\bQ} - \bP\,\bS\,\bP = 0,
@@ -274,35 +275,35 @@ We verify the transversality condition $\frac{d}{d\beta}\operatorname{Re}(\lambd
 The supercriticality (stable limit cycle rather than unstable) follows from computing the first Lyapunov coefficient via center manifold reduction, which is negative due to the concavity of $r^*$ near $\btheta^*$.
 \end{proof}
 
-\begin{theorem}[Optimal KL Schedule via PMP]
+\begin{proposition}[PMP-Motivated KL Schedule]
 \label{thm:schedule}
 Consider the outer optimization problem of choosing a time-varying penalty $\beta: [0, T] \to \R_{>0}$ to maximize the cumulative true reward $\int_0^T r^*(\btheta(t))\,dt$, where $\btheta(t)$ evolves under the closed-loop Nash dynamics of the LQ game.
-Let $\mu > 0$ denote the spectral gap of $\bA_{\mathrm{cl}}(\beta_c)$ restricted to the stable manifold, and let $\omega_c$ be the Hopf frequency from Theorem~\ref{thm:hopf}.
-The PMP-optimal schedule satisfies, in the two-dimensional center-manifold reduction,
+Let $\mu_s > 0$ denote the spectral gap of $\bA_{\mathrm{cl}}(\beta_c)$ restricted to the stable manifold, and let $\omega_c$ be the Hopf frequency from Theorem~\ref{thm:hopf}.
+In the two-dimensional center-manifold reduction, the PMP stationarity condition motivates the ansatz
 \begin{equation}
-  \beta^*(t) = \beta_c\Bigl(\alpha + \eta\,e^{-\mu t}\cos(\omega_c t + \psi)\Bigr),
+  \beta^*(t) = \beta_c\Bigl(\alpha + \eta\,e^{-\mu_s t}\cos(\omega_c t + \psi)\Bigr),
   \label{eq:beta_star}
 \end{equation}
-where $\alpha > 1$ is a constant offset ensuring $\beta^*(t) > \beta_c$ at all times, $\eta > 0$ controls the oscillation amplitude, $\mu > 0$ is a decay rate, and $\psi \in [0, 2\pi)$ is a phase.
-In practice $\alpha, \eta, \mu, \psi$ are tuned to the system; the PMP analysis motivates the \emph{functional form} (exponentially damped oscillation around a super-critical baseline) rather than providing closed-form values for these constants.
+where $\alpha > 1$ is a constant offset ensuring $\beta^*(t) > \beta_c$ at all times, $\eta > 0$ controls the oscillation amplitude, $\mu_s > 0$ is a decay rate, and $\psi \in [0, 2\pi)$ is a phase.
+In practice $\alpha, \eta, \mu_s, \psi$ are tuned to the system; the PMP analysis motivates the \emph{functional form} (exponentially damped oscillation around a super-critical baseline) rather than providing closed-form values for these constants.
 This schedule has three properties:
 \begin{enumerate}[leftmargin=1.5em,itemsep=1pt]
   \item \textbf{Initially conservative:} $\beta^*(0) = \beta_c(\alpha + \eta\cos\psi) > \beta_c$, ensuring early-stage stability.
   \item \textbf{Asymptotic super-criticality:} $\beta^*(t) \to \alpha\beta_c > \beta_c$ as $t \to \infty$, maintaining a margin above the bifurcation threshold.
   \item \textbf{Oscillatory correction:} The $\cos(\omega_c t + \psi)$ term modulates the penalty at the system's natural frequency, damping resonant oscillation modes.
 \end{enumerate}
-\end{theorem}
+\end{proposition}
 
-\begin{proof}[Proof sketch]
+\begin{proof}[Derivation sketch]
 We treat $\beta(t)$ as an additional control in the outer problem.
 The Hamiltonian of the outer problem includes a term coupling $\beta$ to the state and costate.
 The stationarity condition $\partial \cH / \partial \beta = 0$ yields a two-point boundary-value problem.
-Near $\beta \approx \beta_c$, the linearized adjoint system is a damped oscillator with frequency $\omega_c$ and decay rate $\mu$, \emph{motivating} the functional form~\eqref{eq:beta_star}.
-The constants $\alpha, \eta, \mu, \psi$ must be tuned numerically for a given system; the PMP analysis provides the structural form rather than explicit values.
+Near $\beta \approx \beta_c$, the linearized adjoint system is a damped oscillator with frequency $\omega_c$ and decay rate $\mu_s$, \emph{motivating} the functional form~\eqref{eq:beta_star}.
+The constants $\alpha, \eta, \mu_s, \psi$ must be tuned numerically for a given system; the PMP analysis provides the structural form rather than explicit values.
 \end{proof}
 
 \begin{remark}[Interpretation]
-Theorem~\ref{thm:schedule} provides a principled \emph{functional form} for KL annealing.
+Proposition~\ref{thm:schedule} provides a principled \emph{functional form} for KL annealing.
 Constant schedules either over-regularize ($\beta \gg \beta_c$, slow convergence) or under-regularize ($\beta < \beta_c$, reward hacking).
 Linear and cosine decay schedules can cross $\beta_c$, and may outperform the PMP form in practice (Table~\ref{tab:regret}).
 The PMP analysis explains \emph{why} non-constant schedules help: the exponentially-damped oscillatory structure matches the system's natural dynamics near the bifurcation.
@@ -370,10 +371,16 @@ To validate the theory--code connection, we solve the zero-sum ARE (Theorem~\ref
 The LQ game with rotation-like cross-coupling exhibits a Hopf bifurcation at $\beta_c = 0.7311$ with crossing frequency $\omega_c = 0.5149$.
 Simulating the closed-loop Nash dynamics confirms: for $\beta = 1.5\beta_c$, the system converges to zero (stable spiral), while for $\beta = 0.5\beta_c$, the system diverges (no nonlinear saturation in the LQ model to form a limit cycle).
 
+\paragraph{Role of the LQ and nonlinear models.}
+The LQ game (Theorems~\ref{thm:riccati}--\ref{thm:hopf}) determines the bifurcation threshold $\beta_c$ and crossing frequency $\omega_c$ from the linearized dynamics near the Nash equilibrium---these are \emph{local} properties that do not depend on the global nonlinear structure.
+However, the LQ model diverges for $\beta < \beta_c$; producing stable limit cycles requires the cubic saturation terms present in the full nonlinear model.
+Thus the two models play complementary roles: the LQ analysis identifies \emph{when} and \emph{how fast} cycling begins, while the Hopf normal form (with nonlinear saturation) predicts the \emph{amplitude} of the resulting limit cycle.
+The phase portraits and bifurcation diagrams below use the nonlinear model, while the Riccati-based schedule analysis uses the LQ model.
+
 \paragraph{Bifurcation diagram and cycling frequency (Figure~\ref{fig:bifurcation}).}
-Figure~\ref{fig:bifurcation}(a) plots the asymptotic oscillation amplitude as a function of $\beta/\beta_c$, confirming the $O(\sqrt{\beta_c - \beta})$ scaling predicted by Theorem~\ref{thm:hopf}.
-The measured cycling frequency at $\beta = 0.8\beta_c$ is $\hat{\omega} = 0.7354$, compared to the theoretical prediction $\omega_c = 0.7187$ (2.3\% error).
-The Hopf scaling exponent is measured at $0.4983$, matching the theoretical prediction of $0.5$ for a supercritical bifurcation.
+Figure~\ref{fig:bifurcation}(a) plots the asymptotic oscillation amplitude as a function of $\beta/\beta_c$.
+Since the 2D model is itself the Hopf normal form, the $\sqrt{\beta_c - \beta}$ scaling and exponent $0.4983 \approx 0.5$ confirm the integrator's fidelity rather than an independent prediction.
+The non-trivial test is the 4D model: the measured cycling frequency at $\beta = 0.8\beta_c$ is $\hat{\omega} = 0.7354$, compared to the linearization-based prediction $\omega_c = 0.7187$ (2.3\% error), validating that Theorem~\ref{thm:hopf} generalizes beyond the normal form.
 
 \paragraph{Schedule comparison (Figure~\ref{fig:bifurcation}b).}
 Figure~\ref{fig:bifurcation}(b) compares cumulative regret $\int_0^T \|\bz(t)\|^2\,dt$ for five KL penalty schedules.
@@ -394,7 +401,7 @@ Constant ($\beta_c$) & 9.830 & 0.1566 \\
 Constant ($1.5\beta_c$) & 1.733 & 0.0000 \\
 Linear decay & 1.027 & 0.0000 \\
 Cosine anneal & 1.014 & 0.0000 \\
-PMP (Thm.~\ref{thm:schedule}) & 1.526 & 0.0000 \\
+PMP (Prop.~\ref{thm:schedule}) & 1.526 & 0.0000 \\
 \bottomrule
 \end{tabular}
 \caption{Cumulative regret and final state norm for five KL penalty schedules on the 2D alignment game. Non-constant schedules that start above $\beta_c$ and decay achieve both convergence and low regret.}
@@ -452,7 +459,7 @@ Our contribution is applying this machinery to the RLHF alignment problem and ex
 \label{sec:conclusion}
 
 We formulated LLM alignment as a continuous-time two-player differential game, revealing structure that is invisible in discrete-time analyses.
-The Nash equilibrium is characterized by an algebraic Riccati equation (Theorem~\ref{thm:riccati}), the transition from convergent training to reward-hacking cycles is a Hopf bifurcation with a computable critical threshold $\beta_c$ (Theorem~\ref{thm:hopf}), and the optimal KL penalty schedule is a damped oscillation around $\beta_c$ derived from Pontryagin's Maximum Principle (Theorem~\ref{thm:schedule}).
+The Nash equilibrium is characterized by an algebraic Riccati equation (Theorem~\ref{thm:riccati}), the transition from convergent training to reward-hacking cycles is a Hopf bifurcation with a computable critical threshold $\beta_c$ (Theorem~\ref{thm:hopf}), and the PMP analysis motivates a KL penalty schedule as a damped oscillation around $\beta_c$ (Proposition~\ref{thm:schedule}).
 
 Several directions remain open.
 First, extending the zero-sum formulation to a \emph{Stackelberg} game would better model the leader-follower structure of policy-then-adversary updates.

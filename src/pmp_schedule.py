@@ -65,12 +65,12 @@ def analytical_schedule(
     beta_c: float,
     alpha: float = 1.5,
     eta: float = 0.5,
-    mu: float = 0.1,
+    mu: float = 0.03,
     omega: float = 1.0,
     psi: float = 0.0,
 ) -> Callable[[float], float]:
     """
-    PMP-motivated schedule (Theorem 3):
+    PMP-motivated schedule (Proposition 3):
 
         beta*(t) = beta_c * (alpha + eta * exp(-mu*t) * cos(omega*t + psi))
 

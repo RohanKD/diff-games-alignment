@@ -18,7 +18,9 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 
-sys.path.insert(0, '/Users/rohan/neurips_workshop/diff-games-alignment')
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_DIR = os.path.dirname(_SCRIPT_DIR)
+sys.path.insert(0, _PROJECT_DIR)
 from src.nonlinear_game import (
     simulate_2d, simulate_4d,
     compute_beta_c_2d, compute_beta_c_4d,
@@ -26,7 +28,7 @@ from src.nonlinear_game import (
     jacobian_4d, DEFAULT_PARAMS_2D, DEFAULT_PARAMS_4D,
 )
 
-FIGDIR = '/Users/rohan/neurips_workshop/diff-games-alignment/paper/figures'
+FIGDIR = os.path.join(_PROJECT_DIR, 'paper', 'figures')
 os.makedirs(FIGDIR, exist_ok=True)
 
 try:
@@ -185,7 +187,10 @@ def fig_regret_comparison():
         r = res['r']
         times = res['t']
         # Cumulative regret = integral of r^2 dt
-        cumulative_regret = np.cumsum(r**2) * dt
+        # Cumulative trapezoidal integration
+        integrand = r**2
+        increments = 0.5 * (integrand[:-1] + integrand[1:]) * dt
+        cumulative_regret = np.concatenate([[0], np.cumsum(increments)])
         ax.plot(times, cumulative_regret, color=color, linewidth=1.4, label=name)
         final_regrets[name] = cumulative_regret[-1]
 
