@@ -169,13 +169,15 @@ def fig_bifurcation():
 def fig_regret_comparison():
     print("Generating regret_comparison.pdf ...")
 
-    # Define beta schedules
+    from src.pmp_schedule import (
+        constant_schedule, linear_decay_schedule, cosine_schedule, analytical_schedule,
+    )
     schedules = {
-        r'Constant $\beta_c$': lambda t: beta_c,
-        r'Constant $1.5\beta_c$': lambda t: 1.5 * beta_c,
-        'Linear decay': lambda t: 2 * beta_c + (0.5 * beta_c - 2 * beta_c) * t / T,
-        'Cosine anneal': lambda t: 0.5 * beta_c + 0.5 * (2 * beta_c - 0.5 * beta_c) * (1 + np.cos(np.pi * t / T)),
-        'PMP (Thm. 3)': lambda t: beta_c * (1.5 + 0.5 * np.exp(-0.03 * t) * np.cos(omega_0 * t)),
+        r'Constant $\beta_c$': constant_schedule(beta_c),
+        r'Constant $1.5\beta_c$': constant_schedule(1.5 * beta_c),
+        'Linear decay': linear_decay_schedule(2 * beta_c, 0.5 * beta_c, T),
+        'Cosine anneal': cosine_schedule(2 * beta_c, 0.5 * beta_c, T),
+        'PMP (Prop. 1)': analytical_schedule(beta_c, alpha=1.5, eta=0.5, mu_s=0.03, omega=omega_0),
     }
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
@@ -186,10 +188,10 @@ def fig_regret_comparison():
         res = simulate_2d(z0_2d, T, dt, beta_schedule=sched)
         r = res['r']
         times = res['t']
-        # Cumulative regret = integral of r^2 dt
         # Cumulative trapezoidal integration
         integrand = r**2
-        increments = 0.5 * (integrand[:-1] + integrand[1:]) * dt
+        dt_actual = np.diff(times)
+        increments = 0.5 * (integrand[:-1] + integrand[1:]) * dt_actual
         cumulative_regret = np.concatenate([[0], np.cumsum(increments)])
         ax.plot(times, cumulative_regret, color=color, linewidth=1.4, label=name)
         final_regrets[name] = cumulative_regret[-1]
@@ -253,6 +255,59 @@ def fig_eigenvalue_tracking():
 
 
 # ================================================================== #
+# Figure 5: Softmax Alignment Game Bifurcation
+# ================================================================== #
+def fig_softmax_bifurcation():
+    print("Generating softmax_bifurcation.pdf ...")
+
+    from src.softmax_bandit import (
+        find_beta_c, simulate, DEFAULT_PARAMS, bifurcation_sweep,
+    )
+
+    beta_c = find_beta_c()
+    print(f"    beta_c = {beta_c:.4f}")
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
+
+    # --- Panel (a): Time series ---
+    ax = axes[0]
+    theta0 = np.array([0.3, 0.1])
+    phi0 = DEFAULT_PARAMS['phi_star'] + np.array([0.05, 0.02])
+
+    for frac, color, ls in [(0.7, 'C3', '-'), (0.9, 'C1', '-'), (1.3, 'C0', '-')]:
+        beta = frac * beta_c
+        traj = simulate(theta0, phi0, T=200, beta=beta, dt=0.01)
+        label = rf'$\beta = {frac}\beta_c$'
+        ax.plot(traj['t'], traj['true_reward'], color=color, linewidth=1.0,
+                label=label, alpha=0.85)
+
+    ax.set_xlabel('Time $t$')
+    ax.set_ylabel('True reward $E_\\pi[r^*]$')
+    ax.set_title('Alignment Cycling in Softmax Game')
+    ax.legend(fontsize=8, loc='lower right')
+    ax.set_xlim(0, 200)
+
+    # --- Panel (b): Bifurcation diagram ---
+    ax = axes[1]
+    betas, amplitudes, _ = bifurcation_sweep(n_betas=35, T=400)
+
+    ax.scatter(betas / beta_c, amplitudes, s=18, c='C0', zorder=3, label='Simulation')
+    ax.axvline(1.0, color='grey', linestyle='--', linewidth=1.0,
+               label=rf'$\beta_c \approx {beta_c:.3f}$')
+    ax.set_xlabel(r'$\beta / \beta_c$')
+    ax.set_ylabel('Oscillation amplitude')
+    ax.set_title('Bifurcation Diagram (Softmax Game)')
+    ax.legend(fontsize=8)
+    ax.set_ylim(bottom=-0.02)
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(FIGDIR, 'softmax_bifurcation.pdf'),
+                bbox_inches='tight', dpi=300)
+    plt.close(fig)
+    print("  -> done")
+
+
+# ================================================================== #
 # Main
 # ================================================================== #
 if __name__ == '__main__':
@@ -260,4 +315,5 @@ if __name__ == '__main__':
     fig_bifurcation()
     fig_regret_comparison()
     fig_eigenvalue_tracking()
+    fig_softmax_bifurcation()
     print(f"\nAll figures saved to {FIGDIR}/")

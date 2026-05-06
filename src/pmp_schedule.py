@@ -65,14 +65,14 @@ def analytical_schedule(
     beta_c: float,
     alpha: float = 1.5,
     eta: float = 0.5,
-    mu: float = 0.03,
+    mu_s: float = 0.03,
     omega: float = 1.0,
     psi: float = 0.0,
 ) -> Callable[[float], float]:
     """
     PMP-motivated schedule (Proposition 3):
 
-        beta*(t) = beta_c * (alpha + eta * exp(-mu*t) * cos(omega*t + psi))
+        beta*(t) = beta_c * (alpha + eta * exp(-mu_s*t) * cos(omega*t + psi))
 
     Starts above beta_c and decays toward alpha*beta_c > beta_c,
     maintaining a margin above the bifurcation threshold at all times.
@@ -83,8 +83,8 @@ def analytical_schedule(
         Critical beta at the Hopf bifurcation.
     eta : float
         Initial fractional overshoot above beta_c.
-    mu : float
-        Exponential decay rate.
+    mu_s : float
+        Exponential decay rate (spectral gap of the stable manifold).
     omega : float
         Oscillation frequency (ideally matches omega_c from the
         bifurcation analysis).
@@ -92,7 +92,7 @@ def analytical_schedule(
         Phase offset.
     """
     def _schedule(t):
-        return beta_c * (alpha + eta * np.exp(-mu * t) * np.cos(omega * t + psi))
+        return beta_c * (alpha + eta * np.exp(-mu_s * t) * np.cos(omega * t + psi))
     return _schedule
 
 

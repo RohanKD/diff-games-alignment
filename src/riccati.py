@@ -18,7 +18,6 @@ import warnings
 from typing import Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
-from scipy.linalg import eigvals
 
 if TYPE_CHECKING:
     from .lq_game import LQAlignmentGame
@@ -100,15 +99,14 @@ def solve_riccati_hamiltonian(game: "LQAlignmentGame") -> Optional[np.ndarray]:
     P = np.real(P)  # Discard numerical imaginary residual
     P = 0.5 * (P + P.T)  # Symmetrize
 
-    # Check if the solution is stabilizing
+    # Verify: A - SP must be Hurwitz (guaranteed by the Hamiltonian method)
     S = _compute_S(game)
-    J_cl = A + S @ P
+    J_cl = A - S @ P
     max_re = max(np.linalg.eigvals(J_cl).real)
     if max_re > 1e-6:
         warnings.warn(
             f"Riccati solution is NOT stabilizing at beta = {game.beta:.4f} "
-            f"(max Re(eig) = {max_re:.4f}). The system is beyond the "
-            f"bifurcation threshold."
+            f"(max Re(eig) = {max_re:.4f})."
         )
 
     return P
@@ -129,20 +127,20 @@ def closed_loop_jacobian(
     P: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Compute the Jacobian of the closed-loop dynamics.
+    Compute the Jacobian of the closed-loop Nash dynamics.
 
-    With feedback controls:
-        u = (1/gamma) B1_full^T P z
-        v = -(1/delta) B2_full^T P z
+    With feedback controls (V = -½z^T P z for the maximizer):
+        u = -(1/gamma) B1_full^T P z
+        v = +(1/delta) B2_full^T P z
 
     The closed-loop dynamics are:
-        dz/dt = (A + S P) z
+        dz/dt = (A - S P) z
     where S = B1 B1^T / gamma - B2 B2^T / delta.
     """
     A = game.A
     S = _compute_S(game)
 
-    J_cl = A + S @ P
+    J_cl = A - S @ P
 
     eigs = np.linalg.eigvals(J_cl)
     return J_cl, eigs

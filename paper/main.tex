@@ -18,9 +18,6 @@
 \usepackage{enumitem}
 \usepackage{caption}
 \usepackage{subcaption}
-\usepackage{wrapfig}
-\usepackage{algorithm}
-\usepackage{algorithmic}
 
 % Attempt to load neurips_2026; fall back gracefully
 \IfFileExists{neurips_2026.sty}{\usepackage{neurips_2026}}{}
@@ -60,8 +57,8 @@
 \newtheorem{definition}{Definition}
 \newtheorem{remark}{Remark}
 
-\title{Continuous-Time Differential Games for LLM Alignment:\\
-Equilibrium Structure and Optimal Training Schedules}
+\title{Hopf Bifurcations in Two-Player Alignment Games:\\
+When Does Gradient Play Reward-Hack?}
 
 \author{
   Rohan Dalal \\
@@ -79,13 +76,9 @@ Equilibrium Structure and Optimal Training Schedules}
 % ======================================================================
 \begin{abstract}
 Game-theoretic formulations of reinforcement learning from human feedback (RLHF)---including NLHF~\citep{munos2024nash}, INPO~\citep{inpo2025}, and \citet{starlhf2024}---model alignment as a strategic interaction between a policy and an adversary, yet all operate exclusively in discrete time.
-We reformulate LLM alignment as a \emph{continuous-time two-player zero-sum differential game} in which the policy player maximizes a reward-minus-KL objective and the adversary (representing distributional shift or reward misspecification) seeks to degrade it.
-We make three contributions.
-\textbf{(i)}~We derive the Hamilton--Jacobi--Isaacs (HJI) equation governing the value of this game and show that, under a linear-quadratic (LQ) approximation around a locally optimal policy, Nash equilibria are characterized by an algebraic Riccati equation~\citep{basar1999dynamic}.
-\textbf{(ii)}~We identify a Hopf bifurcation in the closed-loop dynamics: there exists a critical KL penalty~$\beta_c$ such that $\beta > \beta_c$ yields asymptotic convergence (stable spiral) while $\beta < \beta_c$ produces reward-hacking oscillations, with a computable cycling frequency~$\omega_c$.
-\textbf{(iii)}~Applying Pontryagin's Maximum Principle (PMP), we derive a principled \emph{non-constant} KL schedule~$\beta^*(t)$ that tracks the separatrix between convergence and cycling.
-Experiments on synthetic alignment games confirm the predicted bifurcation threshold and cycling frequency.
-Schedule comparisons show that non-constant schedules outperform constant baselines, with the best (cosine annealing) reducing regret by $41\%$ relative to a well-tuned constant $\beta = 1.5\beta_c$.
+We reformulate alignment as a \emph{continuous-time two-player zero-sum differential game} and show that reward hacking has the structure of a \emph{Hopf bifurcation}: there exists a critical KL penalty~$\beta_c$ below which gradient play produces sustained oscillations at a computable frequency~$\omega_c$, while the Nash equilibrium remains stable for all~$\beta$.
+The bifurcation thus characterizes the gap between gradient-based training (which reward-hacks) and equilibrium play (which does not).
+We prove supercriticality via center manifold reduction, characterize the Nash equilibrium through an algebraic Riccati equation, and show that the bifurcation persists in a nonlinear softmax alignment game with distribution-shift reward corruption, demonstrating that the phenomenon extends beyond the linear-quadratic framework.
 \end{abstract}
 
 % ======================================================================
@@ -107,7 +100,7 @@ This discrete viewpoint obscures three phenomena that become transparent in the 
 \begin{enumerate}[leftmargin=1.5em,itemsep=1pt,topsep=2pt]
   \item \textbf{Equilibrium geometry.} The Nash equilibrium of the alignment game, when it exists, is the solution of a Hamilton--Jacobi--Isaacs PDE whose characteristics reveal the curvature of the reward landscape and the geometry of the policy manifold.
   \item \textbf{Exact cycling thresholds.} The transition from convergent training to periodic reward-hacking oscillations is a \emph{Hopf bifurcation}---a codimension-one phenomenon with a sharp critical parameter $\beta_c$. While discrete-time systems have an analogous Neimark--Sacker bifurcation, the continuous-time formulation yields cleaner expressions for the threshold and frequency, and connects directly to classical optimal control tools.
-  \item \textbf{Optimal schedules via optimal control.} Pontryagin's Maximum Principle (PMP) transforms the problem of finding the best KL penalty schedule into a boundary-value ODE, yielding closed-form solutions in the LQ regime.
+  \item \textbf{Optimal schedules via optimal control.} Pontryagin's Maximum Principle (PMP) transforms the problem of finding the best KL penalty schedule into a boundary-value ODE, motivating an analytically structured schedule in the LQ regime.
 \end{enumerate}
 
 Our approach connects to the ``deep learning as optimal control'' paradigm initiated by \citet{e2017proposal}, who observed that residual networks are discretizations of controlled ODEs.
@@ -117,11 +110,14 @@ We adapt these ideas from the supervised to the RLHF setting, replacing a single
 \paragraph{Contributions.}
 We make three contributions, each with a precise theorem:
 \begin{enumerate}[leftmargin=1.5em,itemsep=1pt,topsep=2pt]
-  \item \textbf{Nash equilibrium via Riccati} (Theorem~\ref{thm:riccati}): We show that the continuous-time alignment game admits an LQ approximation whose Nash equilibrium is characterized by a classical algebraic Riccati equation~\citep{basar1999dynamic}.
+  \item \textbf{Hopf bifurcation as the mechanism of reward hacking} (Theorem~\ref{thm:hopf}): We show that gradient play in the alignment game undergoes a supercritical Hopf bifurcation at a critical $\beta_c$.
+    For $\beta > \beta_c$, gradient play converges; for $\beta < \beta_c$, it produces sustained reward-hacking oscillations at a computable frequency~$\omega_c$.
+    The Nash equilibrium itself is always stable---the bifurcation characterizes the gap between gradient-based training and equilibrium play.
+    We prove supercriticality by computing the first Lyapunov coefficient via center manifold reduction ($\ell_1 = -0.0518 < 0$ for our 4D model).
+  \item \textbf{Nash equilibrium via Riccati} (Theorem~\ref{thm:riccati}): The continuous-time alignment game admits an LQ approximation whose Nash equilibrium is characterized by an algebraic Riccati equation~\citep{basar1999dynamic}.
     The contribution is the \emph{formulation}---mapping RLHF dynamics onto this framework---not the Riccati theory itself.
-  \item \textbf{Hopf bifurcation threshold} (Theorem~\ref{thm:hopf}): We derive a critical $\beta_c$ at which the closed-loop Jacobian's eigenvalues cross the imaginary axis.
-    For $\beta > \beta_c$, the equilibrium is a stable spiral; for $\beta < \beta_c$, a supercritical Hopf bifurcation gives rise to a stable limit cycle whose frequency we compute exactly.
-  \item \textbf{Principled KL schedule} (Proposition~\ref{thm:schedule}): Applying PMP to the outer optimization over $\beta(\cdot)$, we motivate a non-constant schedule $\beta^*(t)$ that starts above $\beta_c$, decays toward it, and includes an oscillatory correction term matched to the system's natural frequency. We show that all non-constant schedules dramatically outperform constant baselines.
+  \item \textbf{Schedule analysis} (Proposition~\ref{prop:schedule}): The bifurcation analysis explains why non-constant KL schedules outperform constant baselines: schedules that start above $\beta_c$ and decay avoid the unstable regime.
+    A PMP-motivated ansatz captures the structural form (damped oscillation at the natural frequency), though simple heuristics like cosine annealing achieve lower regret in practice.
 \end{enumerate}
 
 % ======================================================================
@@ -155,7 +151,7 @@ If the Isaacs condition holds---the order of $\sup$ and $\inf$ can be interchang
 \paragraph{RLHF notation.}
 Let $\pi_\btheta$ denote a policy parameterized by $\btheta \in \R^{d_\theta}$, $\pi_{\mathrm{ref}}$ a reference policy, $r_\bphi$ a reward model parameterized by $\bphi \in \R^{d_\phi}$, and $r^*$ the true (latent) reward.
 Standard RLHF maximizes $\E_{\pi_\btheta}[r_\bphi(x,y)] - \beta\,\KL(\pi_\btheta \| \pi_{\mathrm{ref}})$.
-In the game-theoretic view, $\btheta$ is controlled by the policy player and $\bphi$ (or the query distribution) by the adversary.
+In the game-theoretic view, $\btheta$ is controlled by the policy player and $\bphi$ by the adversary, which models online reward model corruption from distributional shift: as the policy moves, the training distribution changes, degrading the reward model's accuracy in directions the policy exploits.
 
 % ======================================================================
 % 3. CONTINUOUS-TIME ALIGNMENT GAME
@@ -238,47 +234,52 @@ This is a standard LQ differential game~\citep{basar1999dynamic}.
 \label{thm:riccati}
 Consider the LQ alignment game~\eqref{eq:lq_dynamics} with cost matrix $\widetilde{\bQ} \succ 0$, policy effort $\gamma > 0$, and adversary cost $\delta > 0$.
 Define $\bS = \bB_{1,\mathrm{f}}\bB_{1,\mathrm{f}}^\top/\gamma - \bB_{2,\mathrm{f}}\bB_{2,\mathrm{f}}^\top/\delta$.
-The open-loop Nash equilibrium is characterized by the algebraic Riccati equation
+The feedback (closed-loop) Nash equilibrium is characterized by the algebraic Riccati equation
 \begin{equation}
   \bA^\top \bP + \bP\bA + \widetilde{\bQ} - \bP\,\bS\,\bP = 0,
   \label{eq:riccati}
 \end{equation}
-and the equilibrium exists if and only if~\eqref{eq:riccati} admits a stabilizing solution $\bP \succ 0$ (i.e., $\bA + \bS\bP$ is Hurwitz).
-The Nash equilibrium controls are $\bu^*(t) = \frac{1}{\gamma}\bB_{1,\mathrm{f}}^\top \bP\,\tilde{\bz}(t)$ and $\bv^*(t) = -\frac{1}{\delta}\bB_{2,\mathrm{f}}^\top \bP\,\tilde{\bz}(t)$.
+and the equilibrium exists if and only if~\eqref{eq:riccati} admits a stabilizing solution $\bP$ (i.e., $\bA - \bS\bP$ is Hurwitz).
+The Nash equilibrium controls are $\bu^*(t) = -\frac{1}{\gamma}\bB_{1,\mathrm{f}}^\top \bP\,\tilde{\bz}(t)$ and $\bv^*(t) = \frac{1}{\delta}\bB_{2,\mathrm{f}}^\top \bP\,\tilde{\bz}(t)$, giving closed-loop dynamics $\dot{\tilde{\bz}} = (\bA - \bS\bP)\tilde{\bz}$.
 \end{theorem}
 
 \begin{proof}[Proof sketch]
-In the infinite-horizon LQ game ($T \to \infty$), the value function takes the quadratic form $V(\tilde{\bz}) = \tfrac{1}{2}\tilde{\bz}^\top \bP\,\tilde{\bz}$.
-Substituting into the HJI equation~\eqref{eq:hji_alignment} and matching quadratic coefficients yields~\eqref{eq:riccati}.
-The saddle-point condition requires $\bP \succ 0$: positive definiteness ensures the policy player's problem is concave and the adversary's is convex.
-Stability of the closed-loop matrix $\bA_{\mathrm{cl}} = \bA + \bS\bP$ is necessary and sufficient for finite cost, hence for existence of the equilibrium~\citep{basar1999dynamic}.
+In the infinite-horizon LQ game ($T \to \infty$), the maximizer's value function takes the form $V(\tilde{\bz}) = -\tfrac{1}{2}\tilde{\bz}^\top \bP\,\tilde{\bz}$ with $\bP \succ 0$ (the value is non-positive since the state cost is a penalty).
+The costate is $\bp = \nabla V = -\bP\tilde{\bz}$, giving $\bu^* = \tfrac{1}{\gamma}\bB_{1,\mathrm{f}}^\top \bp = -\tfrac{1}{\gamma}\bB_{1,\mathrm{f}}^\top \bP\tilde{\bz}$.
+Substituting into the HJI equation and matching quadratic coefficients yields~\eqref{eq:riccati}.
+Stability of the closed-loop matrix $\bA_{\mathrm{cl}} = \bA - \bS\bP$ is necessary and sufficient for finite cost, hence for existence of the equilibrium~\citep{basar1999dynamic}.
 \end{proof}
 
-\begin{theorem}[Hopf Bifurcation and Cycling Threshold]
+\begin{theorem}[Hopf Bifurcation in Gradient Play]
 \label{thm:hopf}
-Let $\bA_{\mathrm{cl}}(\beta) = \bA(\beta) + \bS\,\bP(\beta)$ denote the closed-loop Jacobian of the LQ alignment game, where $\bA(\beta)$ depends on $\beta$ through $\bA_{11,\mathrm{eff}} = \bA_{11} - \beta\,\bI$.
-Assume the cross-coupling matrices $\bA_{12}, \bA_{21}$ have skew-symmetric components sufficient to induce rotation in the joint state space.
-Then there exists a critical penalty $\beta_c > 0$, determined as the unique zero of $\max_i \operatorname{Re}\lambda_i(\bA_{\mathrm{cl}}(\beta))$, such that:
+Consider the \emph{open-loop} (gradient play) dynamics $\dot{\tilde{\bz}} = \bA(\beta)\tilde{\bz}$, representing the regime where policy and reward model follow gradient updates without equilibrium feedback.
+Let $\bA(\beta)$ depend on $\beta$ through $\bA_{11,\mathrm{eff}} = \bA_{11} - \beta\,\bI$, and assume $(\bA_{12}\bA_{21} - \bA_{21}\bA_{12})$ is nonzero, so that the cross-coupling has a skew-symmetric component inducing rotation (verified for the models in \S\ref{sec:experiments}).
+Then there exists a critical penalty $\beta_c > 0$, determined as a zero of $\max_i \operatorname{Re}\lambda_i(\bA(\beta))$, such that:
 \begin{enumerate}[leftmargin=1.5em,itemsep=1pt]
-  \item For $\beta > \beta_c$: all eigenvalues of $\bA_{\mathrm{cl}}(\beta)$ have strictly negative real part.
-    The equilibrium is a stable spiral, and all trajectories converge.
+  \item For $\beta > \beta_c$: all eigenvalues of $\bA(\beta)$ have strictly negative real part.
+    The equilibrium is a stable spiral, and gradient play converges.
   \item For $\beta = \beta_c$: a pair of complex conjugate eigenvalues $\lambda_\pm = \pm i\omega_c$ crosses the imaginary axis with non-zero speed $\frac{d}{d\beta}\operatorname{Re}(\lambda_\pm)\big|_{\beta_c} \neq 0$.
     The crossing frequency is $\omega_c = |\operatorname{Im}(\lambda_\pm)|$ at $\beta = \beta_c$.
-  \item For $\beta < \beta_c$: the equilibrium is unstable. In the presence of nonlinear saturation (e.g., cubic terms from curvature of $r^*$), a supercritical Hopf bifurcation produces a stable limit cycle with amplitude $O(\sqrt{\beta_c - \beta})$, corresponding to periodic \emph{reward-hacking oscillations}.
+  \item For $\beta < \beta_c$: gradient play diverges from equilibrium. In the presence of nonlinear saturation (e.g., cubic terms from curvature of $r^*$), a supercritical Hopf bifurcation produces a stable limit cycle with amplitude $O(\sqrt{\beta_c - \beta})$, corresponding to periodic \emph{reward-hacking oscillations}.
 \end{enumerate}
+By contrast, the Nash equilibrium closed-loop $\bA_{\mathrm{cl}} = \bA - \bS\bP$ (Theorem~\ref{thm:riccati}) is Hurwitz for all $\beta > 0$ where the ARE admits a solution.
+The bifurcation thus characterizes the gap between gradient play and equilibrium play: reward hacking arises precisely when practical gradient methods fail to track the Nash equilibrium.
 \end{theorem}
 
 \begin{proof}[Proof sketch]
 The $\beta$-dependence enters $\bA$ through the Hessian of the KL term, which contributes $-\beta\,\bI$ to the $\bA_{11}$ block.
 As $\beta$ decreases from $+\infty$, the damping in the $\btheta$-subsystem decreases, and the cross-coupling terms $\bA_{12}, \bA_{21}$ (policy-reward interaction) create a rotational component.
 We verify the transversality condition $\frac{d}{d\beta}\operatorname{Re}(\lambda)\big|_{\beta_c} \neq 0$ by implicit differentiation of the characteristic polynomial.
-The supercriticality (stable limit cycle rather than unstable) follows from computing the first Lyapunov coefficient via center manifold reduction, which is negative due to the concavity of $r^*$ near $\btheta^*$.
+That $\bA - \bS\bP$ remains Hurwitz is guaranteed by the Hamiltonian eigenvalue construction of $\bP$: the stable invariant subspace of $\bm{H}$ spans the closed-loop stable manifold by design.
+For the 2D model (which is the Hopf normal form with polar dynamics $\dot{r} = (a-\beta)r - \mu r^3$), the first Lyapunov coefficient is exactly $\ell_1 = -\mu = -0.2 < 0$, so the bifurcation is supercritical.
+For the 4D model, we perform a center manifold reduction at $\beta_c$: since the cubic nonlinearities have no quadratic component, the Kuznetsov formula~\citep{kuznetsov2004elements} simplifies to $\ell_1 = \tfrac{1}{2\omega_c}\operatorname{Re}(\bar{\bp}^\top \bm{C}(\bm{q},\bm{q},\bar{\bm{q}}))$, where $\bm{q}$ and $\bar{\bp}$ are the right and left critical eigenvectors.
+Numerical evaluation yields $\ell_1 = -0.0518 < 0$, confirming supercriticality.
 \end{proof}
 
 \begin{proposition}[PMP-Motivated KL Schedule]
-\label{thm:schedule}
+\label{prop:schedule}
 Consider the outer optimization problem of choosing a time-varying penalty $\beta: [0, T] \to \R_{>0}$ to maximize the cumulative true reward $\int_0^T r^*(\btheta(t))\,dt$, where $\btheta(t)$ evolves under the closed-loop Nash dynamics of the LQ game.
-Let $\mu_s > 0$ denote the spectral gap of $\bA_{\mathrm{cl}}(\beta_c)$ restricted to the stable manifold, and let $\omega_c$ be the Hopf frequency from Theorem~\ref{thm:hopf}.
+Let $\mu_s > 0$ denote a decay rate (in higher-dimensional models, the spectral gap of $\bA(\beta_c)$ restricted to the stable manifold; treated as a tunable parameter in general), and let $\omega_c$ be the Hopf frequency from Theorem~\ref{thm:hopf}.
 In the two-dimensional center-manifold reduction, the PMP stationarity condition motivates the ansatz
 \begin{equation}
   \beta^*(t) = \beta_c\Bigl(\alpha + \eta\,e^{-\mu_s t}\cos(\omega_c t + \psi)\Bigr),
@@ -303,7 +304,7 @@ The constants $\alpha, \eta, \mu_s, \psi$ must be tuned numerically for a given 
 \end{proof}
 
 \begin{remark}[Interpretation]
-Proposition~\ref{thm:schedule} provides a principled \emph{functional form} for KL annealing.
+The primary value of Proposition~\ref{prop:schedule} is \emph{diagnostic} rather than prescriptive: it identifies the structural features---exponential damping toward $\beta_c$, oscillation at the natural frequency $\omega_c$---that explain why simple annealing schedules work well near bifurcation points.
 Constant schedules either over-regularize ($\beta \gg \beta_c$, slow convergence) or under-regularize ($\beta < \beta_c$, reward hacking).
 Linear and cosine decay schedules can cross $\beta_c$, and may outperform the PMP form in practice (Table~\ref{tab:regret}).
 The PMP analysis explains \emph{why} non-constant schedules help: the exponentially-damped oscillatory structure matches the system's natural dynamics near the bifurcation.
@@ -316,21 +317,22 @@ The PMP analysis explains \emph{why} non-constant schedules help: the exponentia
 \label{sec:reward_hacking}
 
 The Hopf bifurcation in Theorem~\ref{thm:hopf} provides a precise dynamical-systems interpretation of reward hacking.
-At the Nash equilibrium $\bz^*$, the closed-loop Jacobian $\bA_{\mathrm{cl}}(\beta)$ has a stable manifold $\cW^s(\bz^*)$ and, for $\beta < \beta_c$, an unstable manifold $\cW^u(\bz^*)$.
-Reward hacking corresponds to a trajectory leaving a neighborhood of $\bz^*$ along $\cW^u$: the policy increases the proxy reward $r_\bphi$ while the true reward $r^*$ decreases, producing the characteristic ``over-optimization'' curve of~\citet{gao2023scaling}.
+Under gradient play (i.e., without Nash equilibrium feedback), the open-loop Jacobian $\bA(\beta)$ has a stable manifold $\cW^s(\bz^*)$ and, for $\beta < \beta_c$, an unstable manifold $\cW^u(\bz^*)$.
+Reward hacking corresponds to a gradient-play trajectory leaving a neighborhood of $\bz^*$ along $\cW^u$: the policy increases the proxy reward $r_\bphi$ while the true reward $r^*$ decreases, producing the characteristic ``over-optimization'' curve of~\citet{gao2023scaling}.
+This is the regime relevant to practical RLHF, where players follow gradient updates rather than computing and playing the Nash equilibrium at each step.
 
-More precisely, the stable manifold $\cW^s$ consists of state perturbations $\tilde{\bz}$ aligned with eigenvectors of $\bA_{\mathrm{cl}}$ having negative real-part eigenvalues---these are directions in which both players cooperatively return to equilibrium.
-The unstable manifold $\cW^u$, which emerges at the Hopf bifurcation, corresponds to the adversary-dominated directions along which the reward model's misspecification amplifies.
+The stable manifold $\cW^s$ consists of state perturbations $\tilde{\bz}$ aligned with eigenvectors of $\bA(\beta)$ having negative real-part eigenvalues.
+The unstable manifold $\cW^u$, which emerges at the Hopf bifurcation, corresponds to the directions along which the reward model's misspecification amplifies under gradient dynamics.
 
 \begin{proposition}[Time-to-Hack Lower Bound]
 \label{prop:time_to_hack}
-Let $\beta < \beta_c$ and let $\lambda_{\max} = \max_i \operatorname{Re}(\lambda_i(\bA_{\mathrm{cl}}(\beta)))$ denote the maximal real part among unstable eigenvalues.
+Let $\beta < \beta_c$ and let $\lambda_{\max} = \max_i \operatorname{Re}(\lambda_i(\bA(\beta)))$ denote the maximal real part among unstable eigenvalues of the gradient-play Jacobian.
 For any initial perturbation $\|\tilde{\bz}(0)\| = \epsilon$, the time for the trajectory to reach a hacking threshold $\|\tilde{\bz}(t_h)\| = \Delta$ satisfies
 \begin{equation}
-  t_h \geq \frac{1}{\lambda_{\max}}\ln\frac{\Delta}{\epsilon\,\kappa(\bA_{\mathrm{cl}})},
+  t_h \geq \frac{1}{\lambda_{\max}}\ln\frac{\Delta}{\epsilon\,\kappa(\bA)},
   \label{eq:time_to_hack}
 \end{equation}
-where $\kappa(\bA_{\mathrm{cl}})$ is the condition number of the eigenvector matrix of $\bA_{\mathrm{cl}}$.
+where $\kappa(\bA) = \|\bm{V}\|\,\|\bm{V}^{-1}\|$ is the condition number of the eigenvector matrix $\bm{V}$ of $\bA$ (i.e., $\bA = \bm{V} \bm{\Lambda} \bm{V}^{-1}$), not the standard matrix condition number.
 \end{proposition}
 
 This bound is tight when $\tilde{\bz}(0)$ is aligned with the most unstable eigenvector.
@@ -342,16 +344,16 @@ It implies that reward hacking is slow when $\beta$ is only slightly below $\bet
 \section{Experiments}
 \label{sec:experiments}
 
-We validate our theoretical predictions on a family of synthetic bandit alignment games with $d_\theta = d_\phi = 2$, where closed-form Nash equilibria are available for ground-truth comparison.
+We validate our theoretical predictions on two families of synthetic alignment games: (1) quadratic reward games with $d_\theta = d_\phi = 2$ in both LQ and Hopf normal-form settings, and (2) a nonlinear softmax alignment game with $K=16$ actions and feature-based rewards.
 Implementation details and additional experiments are in the appendix.
 
 \paragraph{Setup.}
 We define a quadratic true reward $r^*(\btheta) = -\tfrac{1}{2}\|\btheta - \btheta^*\|^2$ and a misspecified proxy $r_\bphi(\btheta) = -\tfrac{1}{2}\|\btheta - \bphi\|^2$, where $\bphi$ drifts under adversarial control.
 The KL penalty is $\beta\,\tfrac{1}{2}\|\btheta - \btheta_{\mathrm{ref}}\|^2$.
-We discretize the nonlinear dynamics using a fourth-order Runge--Kutta scheme with step size $h = 5 \times 10^{-3}$; the LQ game simulations use forward Euler with the same step size.
+We discretize the nonlinear dynamics using a fourth-order Runge--Kutta scheme with step size $h = 5 \times 10^{-3}$; the LQ game simulations use forward Euler with step size $h = 10^{-2}$.
 
 \paragraph{Phase portraits (Figure~\ref{fig:phase}).}
-Figure~\ref{fig:phase} shows phase portraits of the $(\theta_1, \phi_1)$ subsystem for $\beta = 2\beta_c$ (stable spiral, left) and $\beta = 0.5\beta_c$ (limit cycle, right).
+Figure~\ref{fig:phase} shows phase portraits in the $(z_1, z_2)$ plane for $\beta = 2\beta_c$ (stable spiral, left) and $\beta = 0.5\beta_c$ (limit cycle, right).
 The predicted bifurcation threshold is $\beta_c = 0.5000$ (2D) and $\beta_c = 0.6957$ (4D); the observed transitions match exactly, confirming Theorem~\ref{thm:hopf}.
 
 \begin{figure}[t]
@@ -361,21 +363,15 @@ The predicted bifurcation threshold is $\beta_c = 0.5000$ (2D) and $\beta_c = 0.
   \label{fig:phase}
 \end{figure}
 
-\paragraph{Limit cycle radius verification.}
-As a consistency check, we verify that the RK4 numerical integration correctly reproduces the analytical steady-state radius $r_{\mathrm{eq}} = \sqrt{(a - \beta)/\mu}$ of the Hopf normal form at six values of $\beta/\beta_c \in \{0.30, 0.50, 0.70, 0.80, 0.90, 0.95\}$.
-The agreement is exact to numerical precision, as expected since the normal form has this radius as an exact fixed point of the polar dynamics.
-The more substantive test is whether the \emph{4D model}---which is \emph{not} in normal form---exhibits the predicted bifurcation structure, which we verify next.
-
-\paragraph{LQ game with Riccati feedback.}
-To validate the theory--code connection, we solve the zero-sum ARE (Theorem~\ref{thm:riccati}) via Hamiltonian eigenvalue decomposition across a range of $\beta$ values.
-The LQ game with rotation-like cross-coupling exhibits a Hopf bifurcation at $\beta_c = 0.7311$ with crossing frequency $\omega_c = 0.5149$.
-Simulating the closed-loop Nash dynamics confirms: for $\beta = 1.5\beta_c$, the system converges to zero (stable spiral), while for $\beta = 0.5\beta_c$, the system diverges (no nonlinear saturation in the LQ model to form a limit cycle).
+\paragraph{LQ game: gradient play vs.\ Nash feedback.}
+We solve the zero-sum ARE (Theorem~\ref{thm:riccati}) via Hamiltonian eigenvalue decomposition and compare the open-loop and closed-loop dynamics.
+The \emph{open-loop} (gradient play) Jacobian $\bA(\beta)$ exhibits a Hopf bifurcation at $\beta_c = 0.1304$ with crossing frequency $\omega_c = 0.505$, confirming Theorem~\ref{thm:hopf}.
+The \emph{Nash closed-loop} Jacobian $\bA - \bS\bP$ is Hurwitz for all tested $\beta$ (max $\operatorname{Re}(\lambda) \approx -0.45$), confirming that Nash equilibrium feedback always stabilizes.
+This validates the key insight of Theorem~\ref{thm:hopf}: reward hacking is a gradient-play phenomenon, and the bifurcation characterizes the gap between gradient methods and equilibrium play.
 
 \paragraph{Role of the LQ and nonlinear models.}
-The LQ game (Theorems~\ref{thm:riccati}--\ref{thm:hopf}) determines the bifurcation threshold $\beta_c$ and crossing frequency $\omega_c$ from the linearized dynamics near the Nash equilibrium---these are \emph{local} properties that do not depend on the global nonlinear structure.
-However, the LQ model diverges for $\beta < \beta_c$; producing stable limit cycles requires the cubic saturation terms present in the full nonlinear model.
-Thus the two models play complementary roles: the LQ analysis identifies \emph{when} and \emph{how fast} cycling begins, while the Hopf normal form (with nonlinear saturation) predicts the \emph{amplitude} of the resulting limit cycle.
-The phase portraits and bifurcation diagrams below use the nonlinear model, while the Riccati-based schedule analysis uses the LQ model.
+The LQ analysis determines the bifurcation threshold $\beta_c$ and crossing frequency $\omega_c$ from the linearized dynamics---these are \emph{local} properties.
+The LQ model diverges for $\beta < \beta_c$; producing stable limit cycles requires nonlinear saturation (cubic terms in the normal form, or softmax boundedness in the bandit game below).
 
 \paragraph{Bifurcation diagram and cycling frequency (Figure~\ref{fig:bifurcation}).}
 Figure~\ref{fig:bifurcation}(a) plots the asymptotic oscillation amplitude as a function of $\beta/\beta_c$.
@@ -387,8 +383,15 @@ Figure~\ref{fig:bifurcation}(b) compares cumulative regret $\int_0^T \|\bz(t)\|^
 Table~\ref{tab:regret} summarizes the results.
 The cosine annealing schedule achieves the lowest regret ($1.014$), followed by linear decay ($1.027$) and the PMP schedule ($1.526$).
 Constant $\beta = \beta_c$ is worst ($9.830$) due to marginal stability, while $\beta = 1.5\beta_c$ achieves $1.733$.
-The PMP schedule underperforms the heuristic decay schedules in this setting; its value lies in providing a principled functional form (Remark~1) rather than optimal numerical performance.
+The PMP schedule underperforms the heuristic decay schedules in this setting; its value lies in explaining \emph{why} annealing helps---the optimal structure near a Hopf bifurcation is a damped oscillation around $\beta_c$ (Remark~1)---rather than in providing a numerically superior schedule.
 All non-constant schedules achieve convergence ($\|\bz(T)\| \approx 0$) while maintaining stability throughout.
+
+\paragraph{Softmax alignment game (Figure~\ref{fig:softmax}).}
+To test whether alignment cycling persists beyond the polynomial normal form, we construct a game with a softmax policy over $K$ actions with feature vectors $\bm{f}_k$ on the unit circle in $\R^2$.
+The policy $\pi_\btheta(k) = \mathrm{softmax}(\btheta^\top \bm{f}_k)$ maximizes $\E_\pi[r_\bphi] - \beta\,\KL(\pi \| \pi_{\mathrm{ref}})$.
+The reward model $\bphi \in \R^2$ is corrupted by distributional shift: $\dot{\bphi} = -\delta(\bphi - \bphi^*) + c \bm{J}\,\E_\pi[\bm{f}]$, where $\bm{J}$ is a rotation modeling the assumption that reward model degradation is not aligned with the policy's movement direction.
+The rotational coupling $\bm{J}$ plays the same structural role as the skew-symmetric cross-coupling in Theorem~\ref{thm:hopf}; the bifurcation threshold $\beta_c \approx 0.935$ is determined by the linearized dynamics, consistent with the LQ prediction.
+The key nonlinear contribution is that softmax saturation (bounded probabilities) produces bounded limit cycles below $\beta_c$ without requiring explicit polynomial saturation terms---the amplitude scaling exponent is $0.58$, close to the $\tfrac{1}{2}$ predicted by the normal-form theory (Figure~\ref{fig:softmax}).
 
 \begin{table}[h]
 \centering
@@ -401,7 +404,7 @@ Constant ($\beta_c$) & 9.830 & 0.1566 \\
 Constant ($1.5\beta_c$) & 1.733 & 0.0000 \\
 Linear decay & 1.027 & 0.0000 \\
 Cosine anneal & 1.014 & 0.0000 \\
-PMP (Prop.~\ref{thm:schedule}) & 1.526 & 0.0000 \\
+PMP (Prop.~\ref{prop:schedule}) & 1.526 & 0.0000 \\
 \bottomrule
 \end{tabular}
 \caption{Cumulative regret and final state norm for five KL penalty schedules on the 2D alignment game. Non-constant schedules that start above $\beta_c$ and decay achieve both convergence and low regret.}
@@ -423,6 +426,13 @@ PMP (Prop.~\ref{thm:schedule}) & 1.526 & 0.0000 \\
   \end{subfigure}
   \caption{\textbf{(a)} Bifurcation diagram confirming the $\sqrt{\beta_c - \beta}$ amplitude scaling (solid: theory, circles: simulation). \textbf{(b)} Cumulative regret for five KL schedules. Non-constant decay schedules dramatically outperform constant baselines; the PMP schedule~\eqref{eq:beta_star} outperforms constant $\beta$ but is slightly worse than cosine/linear decay in this low-dimensional setting.}
   \label{fig:bifurcation}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\textwidth]{figures/softmax_bifurcation.pdf}
+  \caption{\textbf{Softmax alignment game.} \textbf{(a)} True reward under gradient play: oscillatory cycling for $\beta < \beta_c$, convergence above. \textbf{(b)} Bifurcation diagram at $\beta_c \approx 0.935$. The bifurcation threshold is determined by the linearized dynamics (as in Theorem~\ref{thm:hopf}); the softmax nonlinearity provides natural saturation that bounds the limit cycle amplitude.}
+  \label{fig:softmax}
 \end{figure}
 
 % ======================================================================
@@ -452,20 +462,28 @@ The theory of two-player zero-sum differential games is classical~\citep{basar19
 LQ differential games with coupled Riccati equations have been extensively studied~\citep{engwerda2005lq}.
 Our contribution is applying this machinery to the RLHF alignment problem and extracting the bifurcation structure specific to the reward-KL trade-off.
 
+\paragraph{Oscillations in GAN and min-max optimization.}
+The cycling instabilities we characterize via Hopf bifurcation have close analogues in GAN training.
+\citet{mescheder2017numerics} showed that gradient-based GAN training exhibits rotational dynamics around equilibria, with eigenvalues of the training operator crossing the imaginary axis---the same mechanism underlying our Theorem~\ref{thm:hopf}.
+\citet{nagarajan2017gradient} provided local stability analyses of gradient descent in GANs, identifying conditions under which simultaneous gradient play diverges.
+\citet{daskalakis2018training} introduced optimistic training methods to dampen these oscillations, and \citet{mertikopoulos2019optimistic} extended optimistic mirror descent to continuous-time saddle-point problems with formal last-iterate convergence guarantees.
+Our work differs in providing a precise bifurcation-theoretic characterization---computing the exact critical threshold $\beta_c$, the cycling frequency $\omega_c$, and proving supercriticality via the first Lyapunov coefficient---within a model tailored to the alignment setting.
+
 % ======================================================================
 % 8. CONCLUSION
 % ======================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
-We formulated LLM alignment as a continuous-time two-player differential game, revealing structure that is invisible in discrete-time analyses.
-The Nash equilibrium is characterized by an algebraic Riccati equation (Theorem~\ref{thm:riccati}), the transition from convergent training to reward-hacking cycles is a Hopf bifurcation with a computable critical threshold $\beta_c$ (Theorem~\ref{thm:hopf}), and the PMP analysis motivates a KL penalty schedule as a damped oscillation around $\beta_c$ (Proposition~\ref{thm:schedule}).
+We showed that reward hacking in a continuous-time alignment game is a Hopf bifurcation: gradient play becomes oscillatory when the KL penalty $\beta$ drops below a computable threshold $\beta_c$ (Theorem~\ref{thm:hopf}), while the Nash equilibrium remains stable for all $\beta > 0$ (Theorem~\ref{thm:riccati}).
+The bifurcation is supercritical (first Lyapunov coefficient $\ell_1 < 0$), producing bounded limit cycles whose amplitude scales as $O(\sqrt{\beta_c - \beta})$.
+This gap between gradient play and equilibrium play provides a precise characterization of the reward-hacking phenomenon observed empirically in RLHF.
 
 Several directions remain open.
 First, extending the zero-sum formulation to a \emph{Stackelberg} game would better model the leader-follower structure of policy-then-adversary updates.
 Second, incorporating stochastic dynamics---either through It\^o diffusions or stochastic differential games---would capture the noise inherent in minibatch gradient estimation.
 Third, scaling the LQ analysis to high-dimensional parameter spaces via random matrix theory or mean-field approximations is necessary for relevance to modern LLMs.
-Finally, the PMP-derived schedule~\eqref{eq:beta_star} could be implemented as a practical adaptive KL controller in production RLHF pipelines, replacing heuristic schedules with a principled, bifurcation-aware alternative.
+Finally, the Lyapunov coefficient analysis could be extended to higher-dimensional models to determine whether the supercriticality persists, and whether the bifurcation structure survives under more realistic training dynamics.
 
 % ======================================================================
 % REFERENCES
@@ -538,6 +556,31 @@ G.~Swamy, C.~Dann, R.~Kidambi, Z.~S. Wu, and A.~Agarwal.
 Y.~Zhang, D.~Yu, B.~Peng, L.~Song, Y.~Tian, M.~Huo, N.~Jiang, H.~Mi, and D.~Yu.
 \newblock Iterative {N}ash policy optimization: Aligning {LLM}s with general preferences via no-regret learning.
 \newblock In \emph{Proceedings of ICLR}, 2025.
+
+\bibitem[Daskalakis et~al.(2018)]{daskalakis2018training}
+C.~Daskalakis, A.~Ilyas, V.~Syrgkanis, and H.~Zeng.
+\newblock Training {GAN}s with optimism.
+\newblock In \emph{Proceedings of ICLR}, 2018.
+
+\bibitem[Kuznetsov(2004)]{kuznetsov2004elements}
+Y.~A. Kuznetsov.
+\newblock \emph{Elements of Applied Bifurcation Theory}.
+\newblock Springer, 3rd edition, 2004.
+
+\bibitem[Mertikopoulos et~al.(2019)]{mertikopoulos2019optimistic}
+P.~Mertikopoulos, B.~Lecouat, H.~Zenati, C.-S. Foo, V.~Chandrasekhar, and G.~Piliouras.
+\newblock Optimistic mirror descent in saddle-point problems: Going the extra (gradient) mile.
+\newblock In \emph{Proceedings of ICLR}, 2019.
+
+\bibitem[Mescheder et~al.(2017)]{mescheder2017numerics}
+L.~Mescheder, S.~Nowozin, and A.~Geiger.
+\newblock The numerics of {GAN}s.
+\newblock In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2017.
+
+\bibitem[Nagarajan and Kolter(2017)]{nagarajan2017gradient}
+V.~Nagarajan and J.~Z. Kolter.
+\newblock Gradient descent {GAN} optimization is locally stable.
+\newblock In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2017.
 
 \end{thebibliography}
 

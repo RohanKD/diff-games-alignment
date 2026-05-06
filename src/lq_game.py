@@ -11,8 +11,9 @@ Dynamics:
     dy/dt = A21 x + A22 y + B2 v
 
 Payoff (Player 1 maximizes, Player 2 minimizes):
-    J = int_0^T { -x^T Q x - y^T R y - 2 x^T S y
+    J = int_0^T { -(1/2) z^T Q_tilde z
                    - (gamma/2)||u||^2 + (delta/2)||v||^2 } dt
+    where Q_tilde = [[Q, S], [S^T, R]] and z = (x, y).
 """
 
 import numpy as np
@@ -175,8 +176,8 @@ def simulate(
     Simulate the closed-loop Nash equilibrium dynamics via Euler integration.
 
     At each time step the Nash feedback controls are:
-        u*(t) = (1/gamma) B1^T P z(t)
-        v*(t) = -(1/delta) B2^T P z(t)
+        u*(t) = -(1/gamma) B1^T P z(t)
+        v*(t) = +(1/delta) B2^T P z(t)
     where P is the solution of the algebraic Riccati equation for the
     current (possibly time-varying) beta.
 
@@ -262,13 +263,11 @@ def simulate(
         # Riccati gain
         P = _get_P(t)
 
-        # Nash equilibrium controls
-        u = (1.0 / game.gamma) * game.B1.T @ P[:nx, :] @ z  # B1^T is (nu, nx)
-        # For the full P, u depends on P applied to full z but B1 only couples
-        # to the first nx rows.  Correct: B1^T @ P_top @ z where P_top = P[:nx,:].
-        # Actually B1^T is (nu, nx), P is (nz, nz). We need B1_full^T P z.
-        # B1_full = [[B1],[0]], so B1_full^T P z = B1^T @ P[:nx, :] @ z.  Correct.
-        v = -(1.0 / game.delta) * game.B2.T @ P[nx:, :] @ z
+        # Nash equilibrium controls (costate p = -Pz for maximizer's value V = -½z^T P z)
+        # u* = (1/γ) B1_f^T p = -(1/γ) B1^T P[:nx,:] z
+        # v* = -(1/δ) B2_f^T p = +(1/δ) B2^T P[nx:,:] z
+        u = -(1.0 / game.gamma) * game.B1.T @ P[:nx, :] @ z
+        v = (1.0 / game.delta) * game.B2.T @ P[nx:, :] @ z
 
         u_traj[k] = u
         v_traj[k] = v

@@ -75,14 +75,15 @@ def experiment_3_schedule_comparison():
     T = 100.0
     dt = 0.005
 
+    from src.pmp_schedule import (
+        constant_schedule, linear_decay_schedule, cosine_schedule, analytical_schedule,
+    )
     schedules = {
-        'Constant (beta_c)': lambda t: beta_c,
-        'Constant (1.5*beta_c)': lambda t: 1.5 * beta_c,
-        'Linear decay': lambda t: 2*beta_c + (0.5*beta_c - 2*beta_c) * t / T,
-        'Cosine anneal': lambda t: 0.5*beta_c + 0.5*(2*beta_c - 0.5*beta_c) * (1 + np.cos(np.pi * t / T)),
-        # PMP schedule from Proposition 3: beta_c*(1 + eta*exp(-mu*t)*cos(omega_c*t))
-        # eta=0.5, mu estimated from spectral gap, omega_c = omega_0 for 2D model
-        'PMP (Thm. 3)': lambda t: beta_c * (1.5 + 0.5 * np.exp(-0.03*t) * np.cos(omega_0*t)),
+        'Constant (beta_c)': constant_schedule(beta_c),
+        'Constant (1.5*beta_c)': constant_schedule(1.5 * beta_c),
+        'Linear decay': linear_decay_schedule(2 * beta_c, 0.5 * beta_c, T),
+        'Cosine anneal': cosine_schedule(2 * beta_c, 0.5 * beta_c, T),
+        'PMP (Prop. 3)': analytical_schedule(beta_c, alpha=1.5, eta=0.5, mu_s=0.03, omega=omega_0),
     }
 
     for name, sched in schedules.items():
@@ -174,79 +175,56 @@ def experiment_6_lq_game_bifurcation():
     print("=" * 60)
 
     from src.lq_game import LQAlignmentGame
-    from src.riccati import solve_riccati_direct, closed_loop_jacobian
+    from src.riccati import solve_riccati_direct, closed_loop_jacobian, open_loop_jacobian
     from scipy.optimize import brentq
 
     game = LQAlignmentGame.default_2d()
 
-    # Find beta_c via bisection on max Re(eigenvalue)
-    def max_re_at_beta(beta):
+    # --- Open-loop (gradient play) bifurcation ---
+    def max_re_open_loop(beta):
         g = game.with_beta(beta)
-        P = solve_riccati_direct(g)
-        if P is None:
-            return 1.0  # no solution = unstable
-        _, eigs = closed_loop_jacobian(g, P)
+        _, eigs = open_loop_jacobian(g)
         return max(e.real for e in eigs)
 
-    # Bisect to find beta_c
     try:
-        beta_c_lq = brentq(max_re_at_beta, 0.5, 1.5, xtol=1e-6)
-        print(f"  LQ game beta_c = {beta_c_lq:.4f}")
+        beta_c_ol = brentq(max_re_open_loop, 0.01, 1.5, xtol=1e-6)
+        print(f"  Open-loop (gradient play) beta_c = {beta_c_ol:.4f}")
     except ValueError:
-        print("  Could not find beta_c via bisection")
-        return
+        print("  Could not find open-loop beta_c via bisection")
+        beta_c_ol = None
 
-    # Eigenvalues at beta_c
-    g_c = game.with_beta(beta_c_lq)
-    P_c = solve_riccati_direct(g_c)
-    _, eigs_c = closed_loop_jacobian(g_c, P_c)
-    print(f"  Closed-loop eigenvalues at beta_c:")
-    for e in sorted(eigs_c, key=lambda x: -x.real):
-        print(f"    {e.real:+.6f} {e.imag:+.6f}j")
+    if beta_c_ol is not None:
+        g_c = game.with_beta(beta_c_ol)
+        _, eigs_ol = open_loop_jacobian(g_c)
+        print(f"  Open-loop eigenvalues at beta_c:")
+        for e in sorted(eigs_ol, key=lambda x: -x.real):
+            print(f"    {e.real:+.6f} {e.imag:+.6f}j")
+        complex_eigs = [e for e in eigs_ol if abs(e.imag) > 0.01]
+        if complex_eigs:
+            omega_c = max(abs(e.imag) for e in complex_eigs)
+            print(f"  omega_c (cycling frequency) = {omega_c:.4f}")
+            print(f"  This is a HOPF bifurcation (complex conjugate crossing)")
 
-    # Crossing frequency
-    complex_eigs = [e for e in eigs_c if abs(e.imag) > 0.01]
-    if complex_eigs:
-        omega_c = max(abs(e.imag) for e in complex_eigs)
-        print(f"  omega_c (cycling frequency) = {omega_c:.4f}")
-        print(f"  This is a HOPF bifurcation (complex conjugate crossing)")
-    else:
-        print(f"  Real eigenvalue crossing (not a Hopf bifurcation)")
-
-    # Simulate at beta < beta_c to show oscillations
+    # --- Nash closed-loop (A - SP): always stable ---
     print()
-    print("  Simulation at beta = 0.5*beta_c (below threshold):")
-    g_low = game.with_beta(0.5 * beta_c_lq)
-    P_low = solve_riccati_direct(g_low)
-    if P_low is not None:
-        from src.lq_game import simulate
-        z0 = np.array([1.0, 0.5, 0.1, -0.1])
-        traj = simulate(g_low, z0, T=100.0, dt=0.01)
-        x_norm = np.linalg.norm(traj['x'], axis=1)
-        tail = x_norm[int(0.7*len(x_norm)):]
-        print(f"    ||x|| tail: mean={tail.mean():.4f}, "
-              f"max={tail.max():.4f}, min={tail.min():.4f}")
-        if tail.max() > 1e-3:
-            print(f"    System is UNSTABLE (growing/oscillating)")
+    print("  Nash closed-loop (A - SP) stability:")
+    from src.lq_game import simulate
+    z0 = np.array([1.0, 0.5, 0.1, -0.1])
+    for beta_mult, label in [(0.5, "0.5*beta_c"), (1.0, "beta_c"), (1.5, "1.5*beta_c")]:
+        beta_val = beta_mult * (beta_c_ol if beta_c_ol else 0.13)
+        g = game.with_beta(beta_val)
+        P = solve_riccati_direct(g)
+        if P is not None:
+            _, eigs = closed_loop_jacobian(g, P)
+            max_re = max(e.real for e in eigs)
+            traj = simulate(g, z0, T=100.0, dt=0.01)
+            x_norm = np.linalg.norm(traj['x'], axis=1)
+            tail = x_norm[int(0.7*len(x_norm)):]
+            status = "CONVERGED" if tail.max() < 1e-3 else "DIVERGED"
+            print(f"    beta = {label} ({beta_val:.4f}): max Re(A-SP) = {max_re:.6f}, "
+                  f"||x(T)|| = {tail[-1]:.2e} [{status}]")
         else:
-            print(f"    System has converged")
-    else:
-        print(f"    No Riccati solution at this beta (game has no Nash eq.)")
-
-    print()
-    print("  Simulation at beta = 1.5*beta_c (above threshold):")
-    g_high = game.with_beta(1.5 * beta_c_lq)
-    P_high = solve_riccati_direct(g_high)
-    if P_high is not None:
-        traj = simulate(g_high, z0, T=100.0, dt=0.01)
-        x_norm = np.linalg.norm(traj['x'], axis=1)
-        tail = x_norm[int(0.7*len(x_norm)):]
-        print(f"    ||x|| tail: mean={tail.mean():.4f}, "
-              f"max={tail.max():.4f}, min={tail.min():.4f}")
-        if tail.max() < 1e-3:
-            print(f"    System has CONVERGED (stable spiral)")
-        else:
-            print(f"    System is oscillating")
+            print(f"    beta = {label}: No Riccati solution")
 
     print()
 
@@ -270,6 +248,87 @@ def experiment_7_pmp_bvp_solver():
     print()
 
 
+def experiment_8_lyapunov_coefficients():
+    """E8: Compute first Lyapunov coefficients to verify supercriticality."""
+    print("=" * 60)
+    print("Experiment 8: First Lyapunov Coefficients")
+    print("=" * 60)
+
+    from src.lyapunov import lyapunov_coefficient_2d, lyapunov_coefficient_4d
+
+    # 2D model (exact — system IS the normal form)
+    res_2d = lyapunov_coefficient_2d()
+    print(f"  2D model:")
+    print(f"    l_1 = {res_2d['l1']:.4f} ({res_2d['method']})")
+    print(f"    Supercritical: {res_2d['supercritical']}")
+
+    # 4D model (center manifold reduction)
+    res_4d = lyapunov_coefficient_4d()
+    print(f"  4D model:")
+    print(f"    l_1 = {res_4d['l1']:.4f} ({res_4d['method']})")
+    print(f"    beta_c = {res_4d['beta_c']:.4f}, omega_c = {res_4d['omega_c']:.4f}")
+    print(f"    Supercritical: {res_4d['supercritical']}")
+
+    assert res_2d['supercritical'], "2D model should be supercritical!"
+    assert res_4d['supercritical'], "4D model should be supercritical!"
+    print(f"\n  Both models confirmed SUPERCRITICAL (l_1 < 0)")
+    print()
+
+
+def experiment_9_softmax_bandit():
+    """E9: Hopf bifurcation in a nonlinear softmax alignment game."""
+    print("=" * 60)
+    print("Experiment 9: Softmax Alignment Game (Feature-Based)")
+    print("=" * 60)
+
+    from src.softmax_bandit import (
+        find_beta_c, linearize_at_equilibrium, simulate, DEFAULT_PARAMS,
+    )
+
+    beta_c = find_beta_c()
+    print(f"  beta_c = {beta_c:.4f}")
+
+    _, eigs = linearize_at_equilibrium(beta_c)
+    complex_eigs = [e for e in eigs if abs(e.imag) > 0.01]
+    if complex_eigs:
+        omega_c = max(abs(e.imag) for e in complex_eigs)
+        print(f"  omega_c = {omega_c:.4f}")
+        print(f"  Eigenvalues at beta_c:")
+        for e in sorted(eigs, key=lambda x: -x.real):
+            print(f"    {e.real:+.6f} {e.imag:+.6f}j")
+
+    # Verify oscillation below beta_c, convergence above
+    theta0 = np.array([0.3, 0.1])
+    phi0 = DEFAULT_PARAMS['phi_star'] + np.array([0.05, 0.02])
+
+    print(f"\n  Oscillation test:")
+    for frac in [0.5, 0.8, 0.95, 1.0, 1.2, 1.5]:
+        beta = frac * beta_c
+        traj = simulate(theta0, phi0, T=400, beta=beta, dt=0.01)
+        tail = traj['true_reward'][int(0.6 * len(traj['true_reward'])):]
+        amp = (tail.max() - tail.min()) / 2
+        status = "CYCLING" if amp > 0.01 else "CONVERGED"
+        print(f"    beta/beta_c = {frac:.2f}: amplitude = {amp:.4f} [{status}]")
+
+    # Scaling exponent
+    epsilons = []
+    amps = []
+    for frac in [0.97, 0.95, 0.90, 0.85, 0.80, 0.70, 0.60]:
+        beta = frac * beta_c
+        traj = simulate(theta0, phi0, T=500, beta=beta, dt=0.01)
+        tail = traj['true_reward'][int(0.6 * len(traj['true_reward'])):]
+        amp = (tail.max() - tail.min()) / 2
+        if amp > 0.01:
+            epsilons.append(beta_c - beta)
+            amps.append(amp)
+
+    if len(epsilons) > 2:
+        fit = np.polyfit(np.log(epsilons), np.log(amps), 1)
+        print(f"\n  Scaling exponent (should be ~0.5): {fit[0]:.4f}")
+
+    print()
+
+
 if __name__ == '__main__':
     experiment_1_bifurcation_thresholds()
     experiment_2_limit_cycle_prediction()
@@ -278,6 +337,8 @@ if __name__ == '__main__':
     experiment_5_hopf_scaling()
     experiment_6_lq_game_bifurcation()
     experiment_7_pmp_bvp_solver()
+    experiment_8_lyapunov_coefficients()
+    experiment_9_softmax_bandit()
 
     print("=" * 60)
     print("All experiments complete.")
