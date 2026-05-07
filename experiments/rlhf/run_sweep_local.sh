@@ -53,7 +53,7 @@ run_job() {
 
     echo "[GPU ${GPU}] Starting: beta=${BETA}, ${CONDITION}, seed=${SEED}" >&2
 
-    CUDA_VISIBLE_DEVICES=${GPU} python "${SCRIPT_DIR}/run_ppo.py" \
+    CUDA_VISIBLE_DEVICES=${GPU} python3 "${SCRIPT_DIR}/run_ppo.py" \
         --beta ${BETA} \
         ${ONLINE_FLAG} \
         --seed ${SEED} \
