@@ -51,7 +51,7 @@ run_job() {
 
     local LOG_FILE="${RESULTS_DIR}/log_${CONDITION}_b${BETA}_s${SEED}.stdout"
 
-    echo "[GPU ${GPU}] Starting: beta=${BETA}, ${CONDITION}, seed=${SEED}"
+    echo "[GPU ${GPU}] Starting: beta=${BETA}, ${CONDITION}, seed=${SEED}" >&2
 
     CUDA_VISIBLE_DEVICES=${GPU} python "${SCRIPT_DIR}/run_ppo.py" \
         --beta ${BETA} \
