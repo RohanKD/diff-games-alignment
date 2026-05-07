@@ -9,6 +9,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RESULTS_DIR="${SCRIPT_DIR}/results/rlhf"
 mkdir -p "${RESULTS_DIR}"
 
+# Use virtual environment python if available
+PYTHON="${VIRTUAL_ENV:-$HOME/rlhf-env}/bin/python"
+if [ ! -x "$PYTHON" ]; then
+    PYTHON="$(which python3)"
+fi
+echo "Using python: ${PYTHON}"
+
 # Parse args
 TOTAL_STEPS=500
 if [[ "$1" == "--quick" ]]; then
@@ -53,7 +60,7 @@ run_job() {
 
     echo "[GPU ${GPU}] Starting: beta=${BETA}, ${CONDITION}, seed=${SEED}" >&2
 
-    CUDA_VISIBLE_DEVICES=${GPU} python3 "${SCRIPT_DIR}/run_ppo.py" \
+    CUDA_VISIBLE_DEVICES=${GPU} "${PYTHON}" "${SCRIPT_DIR}/run_ppo.py" \
         --beta ${BETA} \
         ${ONLINE_FLAG} \
         --seed ${SEED} \
